@@ -1,4 +1,5 @@
 import { Router } from 'express'
+import { z } from 'zod'
 import { withTransaction } from '../db/transaction.js'
 import { HttpError } from '../lib/httpError.js'
 import { coupleDto, loadCouple, userDto } from '../lib/serializers.js'
@@ -8,6 +9,7 @@ import { inviteLookupLimiter } from '../middleware/rateLimit.js'
 import { Couple } from '../models/couple.js'
 import { Invite } from '../models/invite.js'
 import { User } from '../models/user.js'
+import { Wedding } from '../models/wedding.js'
 
 export const invitesRouter = Router()
 
@@ -28,9 +30,12 @@ invitesRouter.get('/:token', inviteLookupLimiter, async (req, res) => {
   res.json({ inviterName: inviter?.name ?? null, expiresAt: invite.expiresAt })
 })
 
+const acceptBody = z.object({ discardOwnWedding: z.boolean().optional() })
+
 invitesRouter.post('/:token/accept', requireAuth, inviteLookupLimiter, async (req, res) => {
   const tokenHash = hashToken(String(req.params.token))
   const userId = req.auth!.user._id
+  const { discardOwnWedding } = acceptBody.parse(req.body ?? {})
 
   await withTransaction(async (session) => {
     const user = await User.findById(userId).session(session).orFail()
@@ -52,6 +57,24 @@ invitesRouter.post('/:token/accept', requireAuth, inviteLookupLimiter, async (re
       throw new HttpError(409, 'You are already partnered with someone else', 'already_partnered')
     }
 
+    // Joining replaces the partner's own space. A draft they started can be discarded only with
+    // explicit confirmation; a published invitation is never thrown away.
+    const ownWedding = await Wedding.findOne({ coupleId: ownCouple._id }).session(session)
+    if (ownWedding?.status === 'published') {
+      throw new HttpError(
+        409,
+        'You have already published your own invitation, so you can’t join another wedding space',
+        'own_wedding_published',
+      )
+    }
+    if (ownWedding && !discardOwnWedding) {
+      throw new HttpError(
+        409,
+        'You have started your own wedding setup. Joining will discard it.',
+        'own_wedding_draft',
+      )
+    }
+
     // The 'members.1' guard makes the "at most two partners" rule hold under concurrency.
     const joined = await Couple.findOneAndUpdate(
       { _id: invite.coupleId, 'members.1': { $exists: false } },
@@ -63,7 +86,7 @@ invitesRouter.post('/:token/accept', requireAuth, inviteLookupLimiter, async (re
     user.coupleId = invite.coupleId
     await user.save({ session })
 
-    // The partner's own solo space is discarded. Phase 2: refuse (or merge) if it already holds a wedding.
+    if (ownWedding) await Wedding.deleteOne({ _id: ownWedding._id }, { session })
     await Couple.deleteOne({ _id: ownCouple._id }, { session })
   })
 

@@ -4,6 +4,7 @@ import '../models/couple.js'
 import '../models/invite.js'
 import '../models/session.js'
 import '../models/user.js'
+import '../models/wedding.js'
 
 // Creates missing indexes. Unlike `syncIndexes()`, it never drops existing ones (additive only).
 await connectDb()

@@ -12,6 +12,7 @@ import { authRouter } from './routes/auth.js'
 import { coupleRouter } from './routes/couple.js'
 import { healthRouter } from './routes/health.js'
 import { invitesRouter } from './routes/invites.js'
+import { weddingRouter } from './routes/wedding.js'
 
 export function createApp() {
   const app = express()
@@ -30,6 +31,7 @@ export function createApp() {
   api.use('/auth', authRouter)
   api.use('/couple', coupleRouter)
   api.use('/invites', invitesRouter)
+  api.use('/wedding', weddingRouter)
   app.use('/api', api)
 
   app.use(notFoundHandler)

@@ -18,7 +18,9 @@ export const errorHandler: ErrorRequestHandler = (err, req, res, next) => {
   }
 
   if (err instanceof HttpError) {
-    res.status(err.status).json({ error: { code: err.code ?? 'error', message: err.message } })
+    res.status(err.status).json({
+      error: { code: err.code ?? 'error', message: err.message, ...(err.details !== undefined && { details: err.details }) },
+    })
     return
   }
 
