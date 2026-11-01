@@ -1,0 +1,38 @@
+import type { HydratedDocument } from 'mongoose'
+import type { WeddingDoc } from '../models/wedding.js'
+import { todayInLagos } from './dates.js'
+
+export type Wedding = HydratedDocument<WeddingDoc>
+
+/** The answers that make up the invitation itself. Also what guests see on the public page. */
+export const invitationContent = (w: Wedding) => ({
+  template: w.template,
+  palette: w.palette,
+  partnerOneName: w.partnerOneName ?? null,
+  partnerTwoName: w.partnerTwoName ?? null,
+  partnerOneFamily: w.partnerOneFamily ?? null,
+  partnerTwoFamily: w.partnerTwoFamily ?? null,
+  date: w.date ?? null,
+  startTime: w.startTime ?? null,
+  venueName: w.venueName ?? null,
+  venueAddress: w.venueAddress ?? null,
+  dressNote: w.dressNote ?? null,
+  message: w.message ?? null,
+  rsvpDeadline: w.rsvpDeadline ?? null,
+  events: w.events.map((e) => ({
+    id: e.id,
+    name: e.name,
+    date: e.date ?? null,
+    startTime: e.startTime ?? null,
+    venueName: e.venueName ?? null,
+    venueAddress: e.venueAddress ?? null,
+  })),
+})
+
+/** Whether guests can still send a new RSVP: not after the deadline, and not after the wedding day. */
+export function rsvpStatus(w: Wedding): { open: true } | { open: false; reason: 'deadline' | 'past' } {
+  const today = todayInLagos()
+  if (w.date && today > w.date) return { open: false, reason: 'past' }
+  if (w.rsvpDeadline && today > w.rsvpDeadline) return { open: false, reason: 'deadline' }
+  return { open: true }
+}

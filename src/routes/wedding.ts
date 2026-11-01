@@ -3,7 +3,9 @@ import type { HydratedDocument, Types, UpdateQuery } from 'mongoose'
 import { z } from 'zod'
 import { isDuplicateKeyError } from '../db/transaction.js'
 import { calendarDate, clockTime, todayInLagos } from '../lib/dates.js'
+import { PALETTES, TEMPLATES } from '../lib/design.js'
 import { HttpError } from '../lib/httpError.js'
+import { invitationContent } from '../lib/invitation.js'
 import { makeSlug } from '../lib/slug.js'
 import { requireAuth } from '../middleware/auth.js'
 import { Wedding, type WeddingDoc } from '../models/wedding.js'
@@ -40,6 +42,8 @@ const patchBody = z.strictObject({
   message: text(1000),
   rsvpDeadline: date(),
   events: z.array(eventInput).max(10).optional(),
+  template: z.enum(TEMPLATES).optional(),
+  palette: z.enum(PALETTES).optional(),
   checkpoint: z.number().int().min(0).max(50).optional(),
 })
 
@@ -54,25 +58,7 @@ const weddingDto = (w: Wedding) => ({
   checkpoint: w.checkpoint,
   setupCompletedAt: w.setupCompletedAt ?? null,
   publishedAt: w.publishedAt ?? null,
-  partnerOneName: w.partnerOneName ?? null,
-  partnerTwoName: w.partnerTwoName ?? null,
-  partnerOneFamily: w.partnerOneFamily ?? null,
-  partnerTwoFamily: w.partnerTwoFamily ?? null,
-  date: w.date ?? null,
-  startTime: w.startTime ?? null,
-  venueName: w.venueName ?? null,
-  venueAddress: w.venueAddress ?? null,
-  dressNote: w.dressNote ?? null,
-  message: w.message ?? null,
-  rsvpDeadline: w.rsvpDeadline ?? null,
-  events: w.events.map((e) => ({
-    id: e.id,
-    name: e.name,
-    date: e.date ?? null,
-    startTime: e.startTime ?? null,
-    venueName: e.venueName ?? null,
-    venueAddress: e.venueAddress ?? null,
-  })),
+  ...invitationContent(w),
 })
 
 /** What still blocks publishing, keyed by field. Empty when the wedding can go live. */

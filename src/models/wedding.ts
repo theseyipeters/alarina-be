@@ -1,4 +1,5 @@
 import { type InferSchemaType, Schema, model } from 'mongoose'
+import { PALETTES, TEMPLATES } from '../lib/design.js'
 
 // Dates are stored as calendar strings (YYYY-MM-DD) and times as HH:mm, both in Nigerian
 // local time. A wedding happens on a day at a place, not at a UTC instant.
@@ -37,6 +38,9 @@ const weddingSchema = new Schema(
     message: String,
     rsvpDeadline: String,
     events: { type: [eventSchema], default: [] },
+
+    template: { type: String, enum: TEMPLATES, default: 'classic', required: true },
+    palette: { type: String, enum: PALETTES, default: 'ivory', required: true },
   },
   { timestamps: true },
 )

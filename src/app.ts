@@ -12,6 +12,7 @@ import { authRouter } from './routes/auth.js'
 import { coupleRouter } from './routes/couple.js'
 import { healthRouter } from './routes/health.js'
 import { invitesRouter } from './routes/invites.js'
+import { publicRouter } from './routes/public.js'
 import { weddingRouter } from './routes/wedding.js'
 
 export function createApp() {
@@ -32,6 +33,7 @@ export function createApp() {
   api.use('/couple', coupleRouter)
   api.use('/invites', invitesRouter)
   api.use('/wedding', weddingRouter)
+  api.use('/public', publicRouter)
   app.use('/api', api)
 
   app.use(notFoundHandler)
