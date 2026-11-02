@@ -26,3 +26,5 @@ export const publicLookupLimiter = limiter(15 * MINUTE, 120, 'Too many requests.
 export const giftCreateLimiter = limiter(15 * MINUTE, 20, 'Too many gift attempts. Try again in a few minutes.')
 export const accountLookupLimiter = limiter(60 * MINUTE, 30, 'Too many account checks. Try again later.', true)
 export const imageUploadLimiter = limiter(60 * MINUTE, 60, 'Too many photo uploads. Try again later.', true)
+// Staff sign-in and setup links: tighter than couples', since these accounts can do more.
+export const adminAuthLimiter = limiter(15 * MINUTE, 10, 'Too many attempts. Try again in a few minutes.')

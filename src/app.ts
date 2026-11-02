@@ -8,6 +8,7 @@ import { logger } from './config/logger.js'
 import { loadSession } from './middleware/auth.js'
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js'
 import { enforceOrigin } from './middleware/origin.js'
+import { adminRouter } from './routes/admin/index.js'
 import { authRouter } from './routes/auth.js'
 import { coupleRouter } from './routes/couple.js'
 import { asoEbiRouter } from './routes/asoEbi.js'
@@ -49,7 +50,10 @@ export function createApp() {
     }),
   )
   app.use(helmet())
-  app.use(cors({ origin: env.CLIENT_ORIGIN, credentials: true }))
+  // The couples' app and the staff admin app each get CORS for their own part of the API only.
+  const clientCors = cors({ origin: env.CLIENT_ORIGIN, credentials: true })
+  const adminCors = cors({ origin: env.ADMIN_ORIGIN ?? false, credentials: true })
+  app.use((req, res, next) => (req.path.startsWith('/api/admin') ? adminCors : clientCors)(req, res, next))
   // Before the JSON parser: webhooks need the raw body to check their signature.
   app.use('/api/webhooks', webhooksRouter)
   app.use(express.json({ limit: '100kb' }))
@@ -71,6 +75,7 @@ export function createApp() {
   api.use('/wedding', wishlistRouter)
   api.use('/public', publicImagesRouter)
   api.use('/public', publicRouter)
+  app.use('/api/admin', adminRouter)
   app.use('/api', api)
 
   app.use(notFoundHandler)

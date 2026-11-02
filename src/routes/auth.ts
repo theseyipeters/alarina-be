@@ -7,6 +7,7 @@ import { passwordChangedEmail, passwordResetEmail, welcomeEmail } from '../lib/e
 import { HttpError } from '../lib/httpError.js'
 import { sendMail } from '../lib/mailer.js'
 import { hashPassword, verifyPassword } from '../lib/password.js'
+import { accountSuspended, isSuspended } from '../lib/suspension.js'
 import { coupleDto, loadCouple, userDto } from '../lib/serializers.js'
 import { clearSessionCookie, SESSION_COOKIE, startSession } from '../lib/sessions.js'
 import { hashToken, newToken } from '../lib/tokens.js'
@@ -72,6 +73,7 @@ authRouter.post('/signin', authLimiter, async (req, res) => {
   if (!(await verifyPassword(user?.passwordHash, password)) || !user) {
     throw new HttpError(401, 'Incorrect email or password', 'invalid_credentials')
   }
+  if (await isSuspended(user.coupleId)) throw accountSuspended()
 
   await startSession(res, user._id)
   const couple = await loadCouple(user.coupleId).orFail()
@@ -122,6 +124,10 @@ const resetBody = z.object({ token: z.string().min(1).max(200), password: z.stri
 // Sets the new password, uses up the link, signs out every other session, and signs this browser in.
 authRouter.post('/password/reset', authLimiter, async (req, res) => {
   const { token, password } = resetBody.parse(req.body)
+  // A suspended couple can't sign back in this way either. The link stays unused.
+  const pending = await findUsableReset(token)
+  const pendingUser = pending && (await User.findById(pending.userId))
+  if (pendingUser && (await isSuspended(pendingUser.coupleId))) throw accountSuspended()
   const passwordHash = await hashPassword(password)
 
   const userId = await withTransaction(async (session) => {
