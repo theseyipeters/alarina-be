@@ -5,7 +5,7 @@ import { env } from '../config/env.js'
 import { HttpError } from '../lib/httpError.js'
 import { initializeTransaction, paystackConfigured, verifyTransaction } from '../lib/paystack.js'
 import { settle } from '../lib/settle.js'
-import { applyUnlock, GIFTS_UNLOCK_PRICE } from '../lib/unlock.js'
+import { applyUnlock, giftsClosed, giftsLastDay, GIFTS_UNLOCK_PRICE } from '../lib/unlock.js'
 import { requireAuth } from '../middleware/auth.js'
 import { accountLookupLimiter } from '../middleware/rateLimit.js'
 import { GiftUnlock } from '../models/giftUnlock.js'
@@ -20,13 +20,21 @@ unlockRouter.use(requireAuth)
 
 unlockRouter.get('/gifts/access', async (req, res) => {
   const wedding = await ownWedding(req.auth!.user.coupleId)
-  res.json({ unlocked: Boolean(wedding.giftsUnlockedAt), price: GIFTS_UNLOCK_PRICE, configured: paystackConfigured() })
+  res.json({
+    unlocked: Boolean(wedding.giftsUnlockedAt),
+    price: GIFTS_UNLOCK_PRICE,
+    configured: paystackConfigured(),
+    // True once the wedding is over: guests can no longer give, and Gifts can't be unlocked.
+    closed: giftsClosed(wedding),
+    closedAfter: giftsLastDay(wedding),
+  })
 })
 
 // Starts checkout. The money goes to Alárinà's own Paystack account (no subaccount).
 unlockRouter.post('/gifts/unlock', accountLookupLimiter, async (req, res) => {
   const wedding = await ownWedding(req.auth!.user.coupleId)
   if (wedding.giftsUnlockedAt) throw new HttpError(409, 'Gifts is already unlocked', 'already_unlocked')
+  if (giftsClosed(wedding)) throw new HttpError(409, 'Your wedding has passed, so Gifts is closed', 'gifts_ended')
   if (!paystackConfigured()) {
     throw new HttpError(409, 'Payments aren’t set up on this server yet', 'payments_not_configured')
   }

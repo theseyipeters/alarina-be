@@ -7,6 +7,7 @@ import { isDuplicateKeyError } from '../db/transaction.js'
 import { HttpError } from '../lib/httpError.js'
 import { MAX_ITEMS, MAX_QUANTITY } from '../lib/asoEbi.js'
 import { grossUp, MAX_GIFT, MIN_GIFT } from '../lib/fees.js'
+import { giftsClosed } from '../lib/unlock.js'
 import { fundedByItem, MAX_WISHLIST_ITEMS, MIN_CONTRIBUTION } from '../lib/wishlist.js'
 import { rsvpLinkEmail } from '../lib/emails.js'
 import { invitationContent, rsvpStatus, type Wedding as WeddingRecord } from '../lib/invitation.js'
@@ -66,15 +67,15 @@ const invitationDto = async (w: WeddingRecord) => {
 }
 
 /** Guests are offered a gift only when the couple switched it on and payouts are ready. */
-const giftsOpen = (w: WeddingRecord) => Boolean(w.giftsUnlockedAt) && w.giftsEnabled && Boolean(w.payout?.subaccountCode) && paystackConfigured()
+const giftsOpen = (w: WeddingRecord) => Boolean(w.giftsUnlockedAt) && !giftsClosed(w) && w.giftsEnabled && Boolean(w.payout?.subaccountCode) && paystackConfigured()
 
 /** Aso-ebi is offered when it's switched on, has something to buy, and payouts are ready. */
 const asoEbiOpen = (w: WeddingRecord) =>
-  Boolean(w.giftsUnlockedAt) && w.asoEbiEnabled && w.asoEbiItems.length > 0 && Boolean(w.payout?.subaccountCode) && paystackConfigured()
+  Boolean(w.giftsUnlockedAt) && !giftsClosed(w) && w.asoEbiEnabled && w.asoEbiItems.length > 0 && Boolean(w.payout?.subaccountCode) && paystackConfigured()
 
 /** The wishlist is offered when it's switched on, has something on it, and payouts are ready. */
 const wishlistOpen = (w: WeddingRecord) =>
-  Boolean(w.giftsUnlockedAt) && w.wishlistEnabled && w.wishlistItems.length > 0 && Boolean(w.payout?.subaccountCode) && paystackConfigured()
+  Boolean(w.giftsUnlockedAt) && !giftsClosed(w) && w.wishlistEnabled && w.wishlistItems.length > 0 && Boolean(w.payout?.subaccountCode) && paystackConfigured()
 
 const rsvpDto = (r: HydratedDocument<RsvpDoc>) => ({
   name: r.name,
@@ -225,6 +226,10 @@ const checkoutInput = z
 publicRouter.post('/invitations/:slug/checkout', giftCreateLimiter, async (req, res) => {
   const wedding = await findPublished(String(req.params.slug))
   if (!wedding) throw notFound()
+
+  if (giftsClosed(wedding)) {
+    throw new HttpError(409, 'Gifts closed after the wedding', 'gifts_ended')
+  }
 
   const input = checkoutInput.parse(req.body)
   const lines: Line[] = []
