@@ -20,7 +20,7 @@ export const giftsRouter = Router()
 
 giftsRouter.use(requireAuth)
 
-async function ownWedding(coupleId: Types.ObjectId) {
+export async function ownWedding(coupleId: Types.ObjectId) {
   const wedding = await Wedding.findOne({ coupleId })
   if (!wedding) throw new HttpError(404, 'Start your wedding setup first', 'no_wedding')
   return wedding
@@ -43,7 +43,7 @@ const contributionDto = (c: HydratedDocument<ContributionDoc>) => ({
 
 giftsRouter.get('/gifts', async (req, res) => {
   const wedding = await ownWedding(req.auth!.user.coupleId)
-  const contributions = await Contribution.find({ weddingId: wedding._id }).sort({ createdAt: -1 })
+  const contributions = await Contribution.find({ weddingId: wedding._id, kind: { $ne: 'aso_ebi' } }).sort({ createdAt: -1 })
   const succeeded = contributions.filter((c) => c.status === 'success')
 
   res.json({

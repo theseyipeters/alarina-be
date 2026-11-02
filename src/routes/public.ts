@@ -5,6 +5,7 @@ import { z } from 'zod'
 import { env } from '../config/env.js'
 import { isDuplicateKeyError } from '../db/transaction.js'
 import { HttpError } from '../lib/httpError.js'
+import { MAX_QUANTITY } from '../lib/asoEbi.js'
 import { grossUp, MAX_GIFT, MIN_GIFT } from '../lib/fees.js'
 import { rsvpLinkEmail } from '../lib/emails.js'
 import { invitationContent, rsvpStatus, type Wedding as WeddingRecord } from '../lib/invitation.js'
@@ -38,11 +39,24 @@ const invitationDto = (w: WeddingRecord) => {
     rsvpOpen: status.open,
     rsvpClosedReason: status.open ? null : status.reason,
     giftsEnabled: giftsOpen(w),
+    asoEbi: asoEbiOpen(w)
+      ? w.asoEbiItems.map((i) => ({
+          id: String(i._id),
+          name: i.name,
+          description: i.description ?? '',
+          unit: i.unit,
+          price: i.price,
+        }))
+      : [],
   }
 }
 
 /** Guests are offered a gift only when the couple switched it on and payouts are ready. */
 const giftsOpen = (w: WeddingRecord) => w.giftsEnabled && Boolean(w.payout?.subaccountCode) && paystackConfigured()
+
+/** Aso-ebi is offered when it's switched on, has something to buy, and payouts are ready. */
+const asoEbiOpen = (w: WeddingRecord) =>
+  w.asoEbiEnabled && w.asoEbiItems.length > 0 && Boolean(w.payout?.subaccountCode) && paystackConfigured()
 
 const rsvpDto = (r: HydratedDocument<RsvpDoc>) => ({
   name: r.name,
@@ -218,6 +232,77 @@ publicRouter.post('/invitations/:slug/gifts', giftCreateLimiter, async (req, res
   }
 })
 
+const asoEbiInput = z.object({
+  itemId: z.string().max(40),
+  quantity: z.number().int().min(1).max(MAX_QUANTITY),
+  name: z.string().trim().min(1).max(80),
+  email: z.email().max(254),
+  phone,
+  rsvpToken: z.string().max(100).optional(),
+})
+
+publicRouter.post('/invitations/:slug/aso-ebi', giftCreateLimiter, async (req, res) => {
+  const wedding = await findPublished(String(req.params.slug))
+  if (!wedding) throw notFound()
+  if (!asoEbiOpen(wedding)) throw new HttpError(409, 'This couple isn’t offering aso-ebi', 'aso_ebi_closed')
+
+  const input = asoEbiInput.parse(req.body)
+  const item = wedding.asoEbiItems.find((i) => String(i._id) === input.itemId)
+  if (!item) throw new HttpError(404, 'That item isn’t available any more', 'item_not_found')
+  const rsvp = input.rsvpToken
+    ? await Rsvp.findOne({ editTokenHash: hashToken(input.rsvpToken), weddingId: wedding._id })
+    : null
+
+  // The couple receives exactly price × quantity; Paystack's fee is added on top for the guest.
+  const amount = item.price * input.quantity
+  if (amount > MAX_GIFT) throw new HttpError(400, 'That order is too large. Choose a smaller quantity.', 'order_too_large')
+  const { charge, fee } = grossUp(amount)
+  const reference = `alr_${randomBytes(12).toString('hex')}`
+
+  const order = await Contribution.create({
+    kind: 'aso_ebi',
+    weddingId: wedding._id,
+    ...(rsvp && { rsvpId: rsvp._id }),
+    guestName: input.name,
+    guestEmail: input.email.toLowerCase(),
+    asoEbi: {
+      itemId: String(item._id),
+      itemName: item.name,
+      unit: item.unit,
+      unitPrice: item.price,
+      quantity: input.quantity,
+      phone: input.phone,
+    },
+    amount,
+    fee,
+    charge,
+    reference,
+  })
+
+  try {
+    const checkout = await initializeTransaction({
+      email: order.guestEmail,
+      amount: charge,
+      reference,
+      subaccount: wedding.payout!.subaccountCode,
+      callback_url: `${env.CLIENT_ORIGIN}/invite/${wedding.slug}/gift`,
+      metadata: {
+        weddingId: String(wedding._id),
+        guestName: order.guestName,
+        kind: 'aso_ebi',
+        item: item.name,
+        quantity: input.quantity,
+        coupleReceives: amount,
+      },
+    })
+    res.status(201).json({ reference, checkoutUrl: checkout.authorization_url, amount, fee, charge })
+  } catch (err) {
+    order.status = 'failed'
+    await order.save()
+    throw err
+  }
+})
+
 // Where the guest lands after Paystack. Confirms the outcome with Paystack directly, then
 // returns enough of the invitation to theme the thank-you page.
 publicRouter.get('/gifts/:reference', publicLookupLimiter, async (req, res) => {
@@ -228,7 +313,13 @@ publicRouter.get('/gifts/:reference', publicLookupLimiter, async (req, res) => {
   if (gift.status === 'pending') await settle(gift, await verifyTransaction(gift.reference))
 
   res.json({
-    gift: { status: gift.status, amount: gift.amount, guestName: gift.guestName },
+    gift: {
+      kind: gift.kind,
+      status: gift.status,
+      amount: gift.amount,
+      guestName: gift.guestName,
+      item: gift.asoEbi ? { name: gift.asoEbi.itemName, unit: gift.asoEbi.unit, quantity: gift.asoEbi.quantity } : null,
+    },
     invitation: wedding.slug ? invitationDto(wedding) : null,
   })
 })

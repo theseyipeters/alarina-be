@@ -10,6 +10,7 @@ import { errorHandler, notFoundHandler } from './middleware/errorHandler.js'
 import { enforceOrigin } from './middleware/origin.js'
 import { authRouter } from './routes/auth.js'
 import { coupleRouter } from './routes/couple.js'
+import { asoEbiRouter } from './routes/asoEbi.js'
 import { giftsRouter } from './routes/gifts.js'
 import { guestsRouter } from './routes/guests.js'
 import { healthRouter } from './routes/health.js'
@@ -61,6 +62,7 @@ export function createApp() {
   api.use('/wedding', weddingRouter)
   api.use('/wedding', guestsRouter)
   api.use('/wedding', giftsRouter)
+  api.use('/wedding', asoEbiRouter)
   api.use('/public', publicRouter)
   app.use('/api', api)
 

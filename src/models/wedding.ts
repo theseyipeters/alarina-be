@@ -1,4 +1,5 @@
 import { type InferSchemaType, Schema, model } from 'mongoose'
+import { ASO_EBI_UNITS } from '../lib/asoEbi.js'
 import { PALETTES, TEMPLATES } from '../lib/design.js'
 
 // Dates are stored as calendar strings (YYYY-MM-DD) and times as HH:mm, both in Nigerian
@@ -14,6 +15,14 @@ const eventSchema = new Schema(
   },
   { _id: false },
 )
+
+// Aso-ebi on offer to guests. The price is in kobo, per `unit`.
+const asoEbiItemSchema = new Schema({
+  name: { type: String, required: true },
+  description: String,
+  unit: { type: String, enum: ASO_EBI_UNITS, required: true },
+  price: { type: Number, required: true },
+})
 
 const weddingSchema = new Schema(
   {
@@ -62,7 +71,10 @@ const weddingSchema = new Schema(
       ),
       required: false,
     },
+    // Switches cash gifts on for guests. Aso-ebi has its own switch below.
     giftsEnabled: { type: Boolean, default: false, required: true },
+    asoEbiEnabled: { type: Boolean, default: false, required: true },
+    asoEbiItems: { type: [asoEbiItemSchema], default: [] },
 
     template: { type: String, enum: TEMPLATES, default: 'classic', required: true },
     palette: { type: String, enum: PALETTES, default: 'ivory', required: true },
