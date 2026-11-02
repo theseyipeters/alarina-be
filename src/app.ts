@@ -10,13 +10,17 @@ import { errorHandler, notFoundHandler } from './middleware/errorHandler.js'
 import { enforceOrigin } from './middleware/origin.js'
 import { authRouter } from './routes/auth.js'
 import { coupleRouter } from './routes/couple.js'
+import { asoEbiRouter } from './routes/asoEbi.js'
 import { giftsRouter } from './routes/gifts.js'
 import { guestsRouter } from './routes/guests.js'
 import { healthRouter } from './routes/health.js'
+import { imagesRouter, publicImagesRouter } from './routes/images.js'
 import { invitesRouter } from './routes/invites.js'
 import { publicRouter } from './routes/public.js'
 import { webhooksRouter } from './routes/webhooks.js'
+import { unlockRouter } from './routes/unlock.js'
 import { weddingRouter } from './routes/wedding.js'
+import { wishlistRouter } from './routes/wishlist.js'
 
 export function createApp() {
   const app = express()
@@ -25,8 +29,11 @@ export function createApp() {
   // One line per request ("POST /api/auth/signin 401 45ms · invalid_credentials"). Headers
   // (cookies, auth) are never logged. Only unexpected crashes carry a stack trace: the error
   // handler hands those over as res.err; expected HttpErrors just add their code.
+  // Private links (password reset, partner invite, RSVP edit) carry a 43-character token in the
+  // path. Mask anything that long so logs never hold a working link.
+  const safeUrl = (url: string) => url.replace(/[A-Za-z0-9_-]{32,}/g, '[token]')
   const line = (req: express.Request, res: express.Response, ms?: number) =>
-    `${req.method} ${req.originalUrl} ${res.statusCode}${ms === undefined ? '' : ` ${Math.round(ms)}ms`}${
+    `${req.method} ${safeUrl(req.originalUrl)} ${res.statusCode}${ms === undefined ? '' : ` ${Math.round(ms)}ms`}${
       res.locals.errorCode ? ` · ${res.locals.errorCode}` : ''
     }`
   app.use(
@@ -57,7 +64,12 @@ export function createApp() {
   api.use('/invites', invitesRouter)
   api.use('/wedding', weddingRouter)
   api.use('/wedding', guestsRouter)
+  api.use('/wedding', unlockRouter)
+  api.use('/wedding', imagesRouter)
   api.use('/wedding', giftsRouter)
+  api.use('/wedding', asoEbiRouter)
+  api.use('/wedding', wishlistRouter)
+  api.use('/public', publicImagesRouter)
   api.use('/public', publicRouter)
   app.use('/api', api)
 

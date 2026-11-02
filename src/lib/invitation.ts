@@ -8,6 +8,7 @@ export type Wedding = HydratedDocument<WeddingDoc>
 export const invitationContent = (w: Wedding) => ({
   template: w.template,
   palette: w.palette,
+  look: lookDto(w.look),
   partnerOneName: w.partnerOneName ?? null,
   partnerTwoName: w.partnerTwoName ?? null,
   partnerOneFamily: w.partnerOneFamily ?? null,
@@ -28,6 +29,23 @@ export const invitationContent = (w: Wedding) => ({
     venueAddress: e.venueAddress ?? null,
   })),
 })
+
+/** Studio choices, with null for anything that follows the template's default. */
+function lookDto(look: WeddingDoc['look']) {
+  const colors = look?.colors
+  return {
+    namesFont: look?.namesFont ?? null,
+    headingFont: look?.headingFont ?? null,
+    bodyFont: look?.bodyFont ?? null,
+    nameScale: look?.nameScale ?? null,
+    nameCase: look?.nameCase ?? null,
+    joiner: look?.joiner ?? null,
+    texture: look?.texture ?? null,
+    corners: look?.corners ?? null,
+    frame: look?.frame ?? null,
+    colors: colors ? { background: colors.background, card: colors.card, text: colors.text, accent: colors.accent } : null,
+  }
+}
 
 /** Whether guests can still send a new RSVP: not after the deadline, and not after the wedding day. */
 export function rsvpStatus(w: Wedding): { open: true } | { open: false; reason: 'deadline' | 'past' } {

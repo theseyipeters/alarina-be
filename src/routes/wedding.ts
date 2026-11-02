@@ -3,7 +3,19 @@ import type { HydratedDocument, Types, UpdateQuery } from 'mongoose'
 import { z } from 'zod'
 import { isDuplicateKeyError } from '../db/transaction.js'
 import { calendarDate, clockTime, todayInLagos } from '../lib/dates.js'
-import { PALETTES, TEMPLATES } from '../lib/design.js'
+import {
+  BODY_FONTS,
+  CORNERS,
+  FRAMES,
+  HEADING_FONTS,
+  JOINERS,
+  NAME_CASES,
+  NAME_FONTS,
+  NAME_SCALE,
+  PALETTES,
+  TEMPLATES,
+  TEXTURES,
+} from '../lib/design.js'
 import { HttpError } from '../lib/httpError.js'
 import { invitationContent } from '../lib/invitation.js'
 import { makeSlug } from '../lib/slug.js'
@@ -29,6 +41,22 @@ const eventInput = z.object({
   venueAddress: text(200),
 })
 
+const hex = z.string().regex(/^#[0-9a-f]{6}$/i, 'Use a colour like #1e1b18').transform((v) => v.toLowerCase())
+
+// The Studio sends its whole look each time; null puts a choice back to the template's default.
+const lookInput = z.strictObject({
+  namesFont: z.enum(NAME_FONTS).nullable().optional(),
+  headingFont: z.enum(HEADING_FONTS).nullable().optional(),
+  bodyFont: z.enum(BODY_FONTS).nullable().optional(),
+  nameScale: z.number().int().min(NAME_SCALE.min).max(NAME_SCALE.max).nullable().optional(),
+  nameCase: z.enum(NAME_CASES).nullable().optional(),
+  joiner: z.enum(JOINERS).nullable().optional(),
+  texture: z.enum(TEXTURES).nullable().optional(),
+  corners: z.enum(CORNERS).nullable().optional(),
+  frame: z.enum(FRAMES).nullable().optional(),
+  colors: z.strictObject({ background: hex, card: hex, text: hex, accent: hex }).nullable().optional(),
+})
+
 const patchBody = z.strictObject({
   partnerOneName: text(60),
   partnerTwoName: text(60),
@@ -44,6 +72,7 @@ const patchBody = z.strictObject({
   events: z.array(eventInput).max(10).optional(),
   template: z.enum(TEMPLATES).optional(),
   palette: z.enum(PALETTES).optional(),
+  look: lookInput.optional(),
   checkpoint: z.number().int().min(0).max(50).optional(),
 })
 
@@ -89,7 +118,7 @@ weddingRouter.get('/', async (req, res) => {
 // editing different answers at once don't overwrite each other.
 weddingRouter.patch('/', async (req, res) => {
   const coupleId = req.auth!.user.coupleId
-  const { checkpoint, events, ...fields } = patchBody.parse(req.body)
+  const { checkpoint, events, look, ...fields } = patchBody.parse(req.body)
 
   const existing = await findWedding(coupleId)
   if (existing?.status === 'published') {
@@ -111,6 +140,7 @@ weddingRouter.patch('/', async (req, res) => {
   if (events) {
     $set.events = events.map((e) => Object.fromEntries(Object.entries(e).filter(([, v]) => v != null)))
   }
+  if (look) $set.look = Object.fromEntries(Object.entries(look).filter(([, v]) => v != null))
 
   const update: UpdateQuery<WeddingDoc> = {}
   if (Object.keys($set).length) update.$set = $set

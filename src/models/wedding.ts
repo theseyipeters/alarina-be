@@ -1,5 +1,18 @@
 import { type InferSchemaType, Schema, model } from 'mongoose'
-import { PALETTES, TEMPLATES } from '../lib/design.js'
+import { ASO_EBI_UNITS } from '../lib/asoEbi.js'
+import {
+  BODY_FONTS,
+  CORNERS,
+  FRAMES,
+  HEADING_FONTS,
+  JOINERS,
+  NAME_CASES,
+  NAME_FONTS,
+  NAME_SCALE,
+  PALETTES,
+  TEMPLATES,
+  TEXTURES,
+} from '../lib/design.js'
 
 // Dates are stored as calendar strings (YYYY-MM-DD) and times as HH:mm, both in Nigerian
 // local time. A wedding happens on a day at a place, not at a UTC instant.
@@ -11,6 +24,51 @@ const eventSchema = new Schema(
     startTime: String,
     venueName: String,
     venueAddress: String,
+  },
+  { _id: false },
+)
+
+// Aso-ebi on offer to guests. The price is in kobo, per `unit`.
+const asoEbiItemSchema = new Schema({
+  name: { type: String, required: true },
+  description: String,
+  unit: { type: String, enum: ASO_EBI_UNITS, required: true },
+  imageId: String,
+  price: { type: Number, required: true },
+})
+
+// Something on the couple's wishlist. The price is in kobo.
+const wishlistItemSchema = new Schema({
+  name: { type: String, required: true },
+  description: String,
+  imageId: String,
+  price: { type: Number, required: true },
+})
+
+// The couple's own colours, used when the palette is 'custom'. Hex, like #1e1b18.
+const customColorsSchema = new Schema(
+  {
+    background: { type: String, required: true },
+    card: { type: String, required: true },
+    text: { type: String, required: true },
+    accent: { type: String, required: true },
+  },
+  { _id: false },
+)
+
+// Fine-tuning from the Studio. Anything unset follows the template's own default.
+const lookSchema = new Schema(
+  {
+    namesFont: { type: String, enum: NAME_FONTS },
+    headingFont: { type: String, enum: HEADING_FONTS },
+    bodyFont: { type: String, enum: BODY_FONTS },
+    nameScale: { type: Number, min: NAME_SCALE.min, max: NAME_SCALE.max },
+    nameCase: { type: String, enum: NAME_CASES },
+    joiner: { type: String, enum: JOINERS },
+    texture: { type: String, enum: TEXTURES },
+    corners: { type: String, enum: CORNERS },
+    frame: { type: String, enum: FRAMES },
+    colors: { type: customColorsSchema, required: false },
   },
   { _id: false },
 )
@@ -62,10 +120,18 @@ const weddingSchema = new Schema(
       ),
       required: false,
     },
+    // Set when the couple has paid the one-time fee to use Gifts. Nothing in Gifts works before.
+    giftsUnlockedAt: Date,
+    // Switches cash gifts on for guests. Aso-ebi has its own switch below.
     giftsEnabled: { type: Boolean, default: false, required: true },
+    asoEbiEnabled: { type: Boolean, default: false, required: true },
+    asoEbiItems: { type: [asoEbiItemSchema], default: [] },
+    wishlistEnabled: { type: Boolean, default: false, required: true },
+    wishlistItems: { type: [wishlistItemSchema], default: [] },
 
     template: { type: String, enum: TEMPLATES, default: 'classic', required: true },
     palette: { type: String, enum: PALETTES, default: 'ivory', required: true },
+    look: { type: lookSchema, default: () => ({}) },
   },
   { timestamps: true },
 )

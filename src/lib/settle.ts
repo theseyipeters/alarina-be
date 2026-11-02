@@ -1,6 +1,4 @@
-import type { HydratedDocument } from 'mongoose'
 import { logger } from '../config/logger.js'
-import type { ContributionDoc } from '../models/contribution.js'
 import type { VerifiedTransaction } from './paystack.js'
 
 /**
@@ -8,7 +6,16 @@ import type { VerifiedTransaction } from './paystack.js'
  * guest's return from checkout, so it's idempotent: a success is never downgraded, and the
  * amount must match what we asked Paystack to charge before anything counts as paid.
  */
-export async function settle(gift: HydratedDocument<ContributionDoc>, tx: VerifiedTransaction) {
+/** Anything paid for through Paystack: a guest's gift or a couple's unlock fee. */
+type Payment = {
+  reference: string
+  charge: number
+  status: 'pending' | 'success' | 'failed' | 'abandoned'
+  paidAt?: Date | null
+  save(): Promise<unknown>
+}
+
+export async function settle<T extends Payment>(gift: T, tx: VerifiedTransaction): Promise<T> {
   if (gift.status === 'success') return gift
 
   if (tx.status === 'success') {

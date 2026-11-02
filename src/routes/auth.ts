@@ -2,16 +2,18 @@ import { Router } from 'express'
 import mongoose from 'mongoose'
 import { z } from 'zod'
 import { isDuplicateKeyError, withTransaction } from '../db/transaction.js'
-import { welcomeEmail } from '../lib/emails.js'
+import { env } from '../config/env.js'
+import { passwordChangedEmail, passwordResetEmail, welcomeEmail } from '../lib/emails.js'
 import { HttpError } from '../lib/httpError.js'
 import { sendMail } from '../lib/mailer.js'
 import { hashPassword, verifyPassword } from '../lib/password.js'
 import { coupleDto, loadCouple, userDto } from '../lib/serializers.js'
 import { clearSessionCookie, SESSION_COOKIE, startSession } from '../lib/sessions.js'
-import { hashToken } from '../lib/tokens.js'
+import { hashToken, newToken } from '../lib/tokens.js'
 import { requireAuth } from '../middleware/auth.js'
-import { authLimiter } from '../middleware/rateLimit.js'
+import { authLimiter, passwordResetLimiter } from '../middleware/rateLimit.js'
 import { Couple } from '../models/couple.js'
+import { PasswordReset } from '../models/passwordReset.js'
 import { Session } from '../models/session.js'
 import { User } from '../models/user.js'
 
@@ -81,6 +83,66 @@ authRouter.post('/signout', async (req, res) => {
   if (typeof token === 'string') await Session.deleteOne({ tokenHash: hashToken(token) })
   clearSessionCookie(res)
   res.status(204).end()
+})
+
+const RESET_TTL_MINUTES = 60
+const resetLinkInvalid = () =>
+  new HttpError(404, 'This reset link has expired or has already been used. Request a new one.', 'reset_link_invalid')
+
+// Answers the same way whether or not the address has an account, so this can't be used to find
+// out who has signed up. The email is sent without waiting, so the response time doesn't tell either.
+authRouter.post('/password/forgot', passwordResetLimiter, async (req, res) => {
+  const { email } = z.object({ email: z.email().max(254) }).parse(req.body)
+  const user = await User.findOne({ email: email.toLowerCase() })
+
+  if (user) {
+    // Only the newest link works.
+    await PasswordReset.deleteMany({ userId: user._id, usedAt: null })
+    const { token, tokenHash } = newToken()
+    const expiresAt = new Date(Date.now() + RESET_TTL_MINUTES * 60 * 1000)
+    await PasswordReset.create({ userId: user._id, tokenHash, expiresAt })
+    const link = `${env.CLIENT_ORIGIN}/reset-password/${token}`
+    void sendMail({ to: user.email, ...passwordResetEmail({ name: user.name, link, minutes: RESET_TTL_MINUTES }) })
+  }
+
+  res.status(202).json({ ok: true })
+})
+
+const findUsableReset = (token: string) =>
+  PasswordReset.findOne({ tokenHash: hashToken(token), usedAt: null, expiresAt: { $gt: new Date() } })
+
+// Lets the reset page say straight away when a link is dead, before anyone types a new password.
+authRouter.get('/password/reset/:token', authLimiter, async (req, res) => {
+  if (!(await findUsableReset(String(req.params.token)))) throw resetLinkInvalid()
+  res.json({ ok: true })
+})
+
+const resetBody = z.object({ token: z.string().min(1).max(200), password: z.string().min(8).max(128) })
+
+// Sets the new password, uses up the link, signs out every other session, and signs this browser in.
+authRouter.post('/password/reset', authLimiter, async (req, res) => {
+  const { token, password } = resetBody.parse(req.body)
+  const passwordHash = await hashPassword(password)
+
+  const userId = await withTransaction(async (session) => {
+    const reset = await PasswordReset.findOneAndUpdate(
+      { tokenHash: hashToken(token), usedAt: null, expiresAt: { $gt: new Date() } },
+      { usedAt: new Date() },
+      { session },
+    )
+    if (!reset) throw resetLinkInvalid()
+    await User.updateOne({ _id: reset.userId }, { passwordHash }, { session })
+    await Session.deleteMany({ userId: reset.userId }, { session })
+    await PasswordReset.deleteMany({ userId: reset.userId, usedAt: null }, { session })
+    return reset.userId
+  })
+
+  await startSession(res, userId)
+  const user = await User.findById(userId).orFail()
+  const couple = await loadCouple(user.coupleId).orFail()
+  res.json({ user: userDto(user), couple: await coupleDto(couple, user._id) })
+
+  void sendMail({ to: user.email, ...passwordChangedEmail({ name: user.name, changedAt: new Date() }) })
 })
 
 // Always 200 so the frontend can bootstrap without a noisy 401 for signed-out visitors.
