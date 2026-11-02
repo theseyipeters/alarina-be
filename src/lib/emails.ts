@@ -168,7 +168,7 @@ export function welcomeEmail({ name }: { name: string }) {
     steps: [
       { title: 'Invite your partner', text: 'Plan together, each with your own sign-in.' },
       { title: 'Set up your wedding', text: 'Your names, the date, the venue and any events around the day.' },
-      { title: 'Design your invitation', text: 'Choose a layout and palette. Change them whenever you like.' },
+      { title: 'Design your invitation', text: 'Choose a layout, colours and fonts, or open Studio on a laptop for every option. Change them whenever you like.' },
       { title: 'Publish and share', text: 'Send one link to everyone, or your personal links to see whose guests are whose.' },
       { title: 'Watch the replies come in', text: 'See who’s coming at a glance. Turn on cash gifts if you’d like them.' },
     ],
