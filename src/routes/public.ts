@@ -5,7 +5,7 @@ import { z } from 'zod'
 import { env } from '../config/env.js'
 import { isDuplicateKeyError } from '../db/transaction.js'
 import { HttpError } from '../lib/httpError.js'
-import { MAX_QUANTITY } from '../lib/asoEbi.js'
+import { MAX_ITEMS, MAX_QUANTITY } from '../lib/asoEbi.js'
 import { grossUp, MAX_GIFT, MIN_GIFT } from '../lib/fees.js'
 import { rsvpLinkEmail } from '../lib/emails.js'
 import { invitationContent, rsvpStatus, type Wedding as WeddingRecord } from '../lib/invitation.js'
@@ -14,7 +14,7 @@ import { initializeTransaction, paystackConfigured, verifyTransaction } from '..
 import { settle } from '../lib/settle.js'
 import { hashToken, newToken } from '../lib/tokens.js'
 import { giftCreateLimiter, publicLookupLimiter, rsvpCreateLimiter } from '../middleware/rateLimit.js'
-import { Contribution } from '../models/contribution.js'
+import { Contribution, linesOf, type Line } from '../models/contribution.js'
 import { Rsvp, type RsvpDoc } from '../models/rsvp.js'
 import { Wedding } from '../models/wedding.js'
 
@@ -180,99 +180,71 @@ publicRouter.patch('/rsvps/:token', publicLookupLimiter, async (req, res) => {
   res.json({ rsvp: rsvpDto(rsvp), invitation: invitationDto(wedding), editExpiresAt: rsvp.editExpiresAt })
 })
 
-const giftInput = z.object({
-  // Naira, whole numbers: what the couple should receive. Paystack's fee is added on top.
-  amount: z.number().int().min(MIN_GIFT / 100).max(MAX_GIFT / 100),
-  name: z.string().trim().min(1).max(80),
-  email: z.email().max(254),
-  // The guest's private RSVP link token, to connect the gift to their reply. Optional.
-  rsvpToken: z.string().max(100).optional(),
-})
+const checkoutInput = z
+  .object({
+    // Naira, whole numbers: what the couple should receive as cash. Paystack's fee is added on top.
+    cash: z.number().int().min(MIN_GIFT / 100).max(MAX_GIFT / 100).optional(),
+    asoEbi: z
+      .array(z.object({ itemId: z.string().max(40), quantity: z.number().int().min(1).max(MAX_QUANTITY) }))
+      .max(MAX_ITEMS)
+      .optional(),
+    name: z.string().trim().min(1).max(80),
+    email: z.email().max(254),
+    phone: phone.optional(),
+    // The guest's private RSVP link token, to connect the payment to their reply. Optional.
+    rsvpToken: z.string().max(100).optional(),
+  })
+  .refine((v) => v.cash !== undefined || (v.asoEbi?.length ?? 0) > 0, { message: 'Choose something to give' })
+  .refine((v) => !v.asoEbi?.length || v.phone, { message: 'Add a phone number for your aso-ebi order', path: ['phone'] })
 
-publicRouter.post('/invitations/:slug/gifts', giftCreateLimiter, async (req, res) => {
+// One checkout for a guest's whole basket: a cash gift and/or aso-ebi, paid in a single Paystack
+// transaction so the guest pays the fee once. The couple receive exactly the sum of the lines.
+publicRouter.post('/invitations/:slug/checkout', giftCreateLimiter, async (req, res) => {
   const wedding = await findPublished(String(req.params.slug))
   if (!wedding) throw notFound()
-  if (!giftsOpen(wedding)) throw new HttpError(409, 'This couple isn’t accepting cash gifts', 'gifts_closed')
 
-  const input = giftInput.parse(req.body)
-  const rsvp = input.rsvpToken
-    ? await Rsvp.findOne({ editTokenHash: hashToken(input.rsvpToken), weddingId: wedding._id })
-    : null
+  const input = checkoutInput.parse(req.body)
+  const lines: Line[] = []
 
-  const amount = input.amount * 100
-  const { charge, fee } = grossUp(amount)
-  const reference = `alr_${randomBytes(12).toString('hex')}`
-
-  const gift = await Contribution.create({
-    weddingId: wedding._id,
-    ...(rsvp && { rsvpId: rsvp._id }),
-    guestName: input.name,
-    guestEmail: input.email.toLowerCase(),
-    amount,
-    fee,
-    charge,
-    reference,
-  })
-
-  try {
-    const checkout = await initializeTransaction({
-      email: gift.guestEmail,
-      amount: charge,
-      reference,
-      subaccount: wedding.payout!.subaccountCode,
-      callback_url: `${env.CLIENT_ORIGIN}/invite/${wedding.slug}/gift`,
-      metadata: { weddingId: String(wedding._id), guestName: gift.guestName, coupleReceives: amount },
-    })
-    res.status(201).json({ reference, checkoutUrl: checkout.authorization_url, amount, fee, charge })
-  } catch (err) {
-    // The RSVP is untouched; the gift attempt is simply marked failed.
-    gift.status = 'failed'
-    await gift.save()
-    throw err
+  if (input.cash !== undefined) {
+    if (!giftsOpen(wedding)) throw new HttpError(409, 'This couple isn’t accepting cash gifts', 'gifts_closed')
+    lines.push({ kind: 'cash', amount: input.cash * 100 })
   }
-})
 
-const asoEbiInput = z.object({
-  itemId: z.string().max(40),
-  quantity: z.number().int().min(1).max(MAX_QUANTITY),
-  name: z.string().trim().min(1).max(80),
-  email: z.email().max(254),
-  phone,
-  rsvpToken: z.string().max(100).optional(),
-})
+  if (input.asoEbi?.length) {
+    if (!asoEbiOpen(wedding)) throw new HttpError(409, 'This couple isn’t offering aso-ebi', 'aso_ebi_closed')
+    for (const { itemId, quantity } of input.asoEbi) {
+      const item = wedding.asoEbiItems.find((i) => String(i._id) === itemId)
+      if (!item) throw new HttpError(404, 'An item in your basket isn’t available any more', 'item_not_found')
+      if (lines.some((l) => l.itemId === itemId)) throw new HttpError(400, 'Each item can only appear once', 'duplicate_item')
+      lines.push({
+        kind: 'aso_ebi',
+        amount: item.price * quantity,
+        itemId,
+        itemName: item.name,
+        unit: item.unit,
+        unitPrice: item.price,
+        quantity,
+      })
+    }
+  }
 
-publicRouter.post('/invitations/:slug/aso-ebi', giftCreateLimiter, async (req, res) => {
-  const wedding = await findPublished(String(req.params.slug))
-  if (!wedding) throw notFound()
-  if (!asoEbiOpen(wedding)) throw new HttpError(409, 'This couple isn’t offering aso-ebi', 'aso_ebi_closed')
+  const amount = lines.reduce((sum, l) => sum + l.amount, 0)
+  if (amount > MAX_GIFT) throw new HttpError(400, 'That basket is too large. Remove something and try again.', 'basket_too_large')
 
-  const input = asoEbiInput.parse(req.body)
-  const item = wedding.asoEbiItems.find((i) => String(i._id) === input.itemId)
-  if (!item) throw new HttpError(404, 'That item isn’t available any more', 'item_not_found')
   const rsvp = input.rsvpToken
     ? await Rsvp.findOne({ editTokenHash: hashToken(input.rsvpToken), weddingId: wedding._id })
     : null
-
-  // The couple receives exactly price × quantity; Paystack's fee is added on top for the guest.
-  const amount = item.price * input.quantity
-  if (amount > MAX_GIFT) throw new HttpError(400, 'That order is too large. Choose a smaller quantity.', 'order_too_large')
   const { charge, fee } = grossUp(amount)
   const reference = `alr_${randomBytes(12).toString('hex')}`
 
-  const order = await Contribution.create({
-    kind: 'aso_ebi',
+  const payment = await Contribution.create({
     weddingId: wedding._id,
     ...(rsvp && { rsvpId: rsvp._id }),
     guestName: input.name,
     guestEmail: input.email.toLowerCase(),
-    asoEbi: {
-      itemId: String(item._id),
-      itemName: item.name,
-      unit: item.unit,
-      unitPrice: item.price,
-      quantity: input.quantity,
-      phone: input.phone,
-    },
+    ...(input.phone && { guestPhone: input.phone }),
+    lines,
     amount,
     fee,
     charge,
@@ -281,24 +253,18 @@ publicRouter.post('/invitations/:slug/aso-ebi', giftCreateLimiter, async (req, r
 
   try {
     const checkout = await initializeTransaction({
-      email: order.guestEmail,
+      email: payment.guestEmail,
       amount: charge,
       reference,
       subaccount: wedding.payout!.subaccountCode,
       callback_url: `${env.CLIENT_ORIGIN}/invite/${wedding.slug}/gift`,
-      metadata: {
-        weddingId: String(wedding._id),
-        guestName: order.guestName,
-        kind: 'aso_ebi',
-        item: item.name,
-        quantity: input.quantity,
-        coupleReceives: amount,
-      },
+      metadata: { weddingId: String(wedding._id), guestName: payment.guestName, coupleReceives: amount, lines: lines.length },
     })
     res.status(201).json({ reference, checkoutUrl: checkout.authorization_url, amount, fee, charge })
   } catch (err) {
-    order.status = 'failed'
-    await order.save()
+    // The RSVP is untouched; the attempt is simply marked failed.
+    payment.status = 'failed'
+    await payment.save()
     throw err
   }
 })
@@ -314,11 +280,16 @@ publicRouter.get('/gifts/:reference', publicLookupLimiter, async (req, res) => {
 
   res.json({
     gift: {
-      kind: gift.kind,
       status: gift.status,
       amount: gift.amount,
       guestName: gift.guestName,
-      item: gift.asoEbi ? { name: gift.asoEbi.itemName, unit: gift.asoEbi.unit, quantity: gift.asoEbi.quantity } : null,
+      lines: linesOf(gift).map((l) => ({
+        kind: l.kind,
+        amount: l.amount,
+        itemName: l.itemName ?? null,
+        unit: l.unit ?? null,
+        quantity: l.quantity ?? null,
+      })),
     },
     invitation: wedding.slug ? invitationDto(wedding) : null,
   })

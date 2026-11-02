@@ -6,7 +6,7 @@ import { ASO_EBI_UNITS, MAX_ITEMS, MAX_PRICE_NAIRA, MIN_PRICE_NAIRA } from '../l
 import { HttpError } from '../lib/httpError.js'
 import { paystackConfigured } from '../lib/paystack.js'
 import { requireAuth } from '../middleware/auth.js'
-import { Contribution, type ContributionDoc } from '../models/contribution.js'
+import { Contribution, hasAsoEbi, type ContributionDoc } from '../models/contribution.js'
 import { ownWedding } from './gifts.js'
 
 // The couple's side of aso-ebi: what's on offer, switching it on, and who has ordered.
@@ -22,23 +22,30 @@ const itemInput = z.strictObject({
   price: z.number().int().min(MIN_PRICE_NAIRA).max(MAX_PRICE_NAIRA),
 })
 
-const orderDto = (c: HydratedDocument<ContributionDoc>) => ({
-  id: String(c._id),
-  guestName: c.guestName,
-  guestEmail: c.guestEmail,
-  phone: c.asoEbi?.phone ?? '',
-  itemName: c.asoEbi?.itemName ?? '',
-  unit: c.asoEbi?.unit ?? '',
-  quantity: c.asoEbi?.quantity ?? 0,
-  amount: c.amount,
-  status: c.status,
-  createdAt: c.createdAt,
-  paidAt: c.paidAt ?? null,
-})
+// One order per aso-ebi line, so a basket with two items shows as two orders.
+const orderDtos = (c: HydratedDocument<ContributionDoc>) =>
+  c.lines
+    .map((line, index) => ({ line, index }))
+    .filter(({ line }) => line.kind === 'aso_ebi')
+    .map(({ line, index }) => ({
+      id: `${String(c._id)}-${index}`,
+      itemId: line.itemId ?? '',
+      guestName: c.guestName,
+      guestEmail: c.guestEmail,
+      phone: c.guestPhone ?? '',
+      itemName: line.itemName ?? '',
+      unit: line.unit ?? '',
+      quantity: line.quantity ?? 0,
+      amount: line.amount,
+      status: c.status,
+      createdAt: c.createdAt,
+      paidAt: c.paidAt ?? null,
+    }))
 
 asoEbiRouter.get('/gifts/aso-ebi', async (req, res) => {
   const wedding = await ownWedding(req.auth!.user.coupleId)
-  const orders = await Contribution.find({ weddingId: wedding._id, kind: 'aso_ebi' }).sort({ createdAt: -1 })
+  const payments = await Contribution.find({ weddingId: wedding._id, ...hasAsoEbi }).sort({ createdAt: -1 })
+  const orders = payments.flatMap(orderDtos)
   const paid = orders.filter((o) => o.status === 'success')
 
   res.json({
@@ -52,11 +59,11 @@ asoEbiRouter.get('/gifts/aso-ebi', async (req, res) => {
       description: item.description ?? '',
       unit: item.unit,
       price: item.price,
-      sold: paid.filter((o) => o.asoEbi?.itemId === String(item._id)).reduce((sum, o) => sum + (o.asoEbi?.quantity ?? 0), 0),
+      sold: paid.filter((o) => o.itemId === String(item._id)).reduce((sum, o) => sum + o.quantity, 0),
     })),
     totals: { received: paid.reduce((sum, o) => sum + o.amount, 0), count: paid.length },
     // Abandoned checkouts are noise for the couple, so only real outcomes are listed.
-    orders: orders.filter((o) => o.status !== 'abandoned').map(orderDto),
+    orders: orders.filter((o) => o.status !== 'abandoned'),
   })
 })
 
