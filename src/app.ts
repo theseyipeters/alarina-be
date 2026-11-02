@@ -25,8 +25,11 @@ export function createApp() {
   // One line per request ("POST /api/auth/signin 401 45ms · invalid_credentials"). Headers
   // (cookies, auth) are never logged. Only unexpected crashes carry a stack trace: the error
   // handler hands those over as res.err; expected HttpErrors just add their code.
+  // Private links (password reset, partner invite, RSVP edit) carry a 43-character token in the
+  // path. Mask anything that long so logs never hold a working link.
+  const safeUrl = (url: string) => url.replace(/[A-Za-z0-9_-]{32,}/g, '[token]')
   const line = (req: express.Request, res: express.Response, ms?: number) =>
-    `${req.method} ${req.originalUrl} ${res.statusCode}${ms === undefined ? '' : ` ${Math.round(ms)}ms`}${
+    `${req.method} ${safeUrl(req.originalUrl)} ${res.statusCode}${ms === undefined ? '' : ` ${Math.round(ms)}ms`}${
       res.locals.errorCode ? ` · ${res.locals.errorCode}` : ''
     }`
   app.use(

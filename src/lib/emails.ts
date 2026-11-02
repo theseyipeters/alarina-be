@@ -178,6 +178,51 @@ export function welcomeEmail({ name }: { name: string }) {
   })
 }
 
+/** The "forgot password" link. */
+export function passwordResetEmail({ name, link, minutes }: { name: string; link: string; minutes: number }) {
+  const firstName = name.trim().split(/\s+/)[0]
+  const valid = minutes === 60 ? 'an hour' : `${minutes} minutes`
+  return render({
+    subject: 'Reset your Alárinà password',
+    preheader: `Choose a new password. This link works once, for ${valid}.`,
+    eyebrow: 'Password reset',
+    heading: `Reset your password, ${firstName}`,
+    paragraphs: ['Someone asked to reset the password for your Alárinà account. If that was you, choose a new one below.'],
+    action: { label: 'Choose a new password', url: link },
+    note: `This link works once and expires in ${valid}. If you didn’t ask for it, you can ignore this email: your password stays the same.`,
+    footer: 'You’re getting this because a password reset was requested for this address on Alárinà.',
+  })
+}
+
+/** Sent after a password changes, so someone would notice if it wasn't them. */
+export function passwordChangedEmail({ name, changedAt }: { name: string; changedAt: Date }) {
+  const firstName = name.trim().split(/\s+/)[0]
+  const when = new Intl.DateTimeFormat('en-NG', {
+    timeZone: 'Africa/Lagos',
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  })
+    .format(changedAt)
+    .replace(/\b(AM|PM)\b/, (m) => m.toLowerCase())
+  return render({
+    subject: 'Your Alárinà password was changed',
+    preheader: 'If this wasn’t you, reset your password now.',
+    eyebrow: 'Security',
+    heading: 'Your password was changed',
+    paragraphs: [
+      `Hi ${firstName}, the password for your Alárinà account was changed on ${when} (Lagos time). Every other device has been signed out.`,
+      'If this was you, there’s nothing else to do.',
+    ],
+    action: { label: 'Reset my password', url: `${env.CLIENT_ORIGIN}/forgot-password` },
+    note: 'If you didn’t change it, reset it straight away with the button above. Anyone using the old password has already been signed out.',
+    footer: 'You’re getting this because the password changed on your Alárinà account.',
+  })
+}
+
 export function partnerInviteEmail({ inviterName, link, expiresAt }: { inviterName: string; link: string; expiresAt: Date }) {
   return render({
     subject: `${inviterName} invited you to plan your wedding on Alárinà`,
