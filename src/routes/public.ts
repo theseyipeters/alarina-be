@@ -6,6 +6,7 @@ import { env } from '../config/env.js'
 import { isDuplicateKeyError } from '../db/transaction.js'
 import { HttpError } from '../lib/httpError.js'
 import { grossUp, MAX_GIFT, MIN_GIFT } from '../lib/fees.js'
+import { rsvpLinkEmail } from '../lib/emails.js'
 import { invitationContent, rsvpStatus, type Wedding as WeddingRecord } from '../lib/invitation.js'
 import { sendMail } from '../lib/mailer.js'
 import { initializeTransaction, paystackConfigured, verifyTransaction } from '../lib/paystack.js'
@@ -28,8 +29,6 @@ const linkInvalid = () =>
     'This link has expired or is no longer valid. Contact the couple if you need to change your reply.',
     'rsvp_link_invalid',
   )
-
-const coupleNames = (w: WeddingRecord) => [w.partnerOneName, w.partnerTwoName].filter(Boolean).join(' & ')
 
 const invitationDto = (w: WeddingRecord) => {
   const status = rsvpStatus(w)
@@ -61,14 +60,12 @@ const editExpiry = (w: WeddingRecord) =>
 
 const findPublished = (slug: string) => Wedding.findOne({ slug, status: 'published' })
 
-async function sendEditLink(w: WeddingRecord, to: string, link: string, isReminder: boolean) {
-  const names = coupleNames(w)
-  return sendMail({
-    to,
-    subject: isReminder ? `Your RSVP link for ${names}’s wedding` : `Thanks for your reply to ${names}`,
-    text: `${isReminder ? 'Here is a new link' : 'Thanks for replying. Here is your private link'} to view or change your RSVP for ${names}’s wedding:\n\n${link}\n\nKeep it to yourself: anyone with this link can change your reply. Any earlier link no longer works.`,
+/** Emails the guest their private link. `isResend`: they'd already replied, so it's a fresh one. */
+const sendEditLink = (wedding: WeddingRecord, rsvp: RsvpDoc, link: string, expiresAt: Date, isResend: boolean) =>
+  sendMail({
+    to: rsvp.email,
+    ...rsvpLinkEmail({ wedding, guestName: rsvp.name, attending: rsvp.attending, link, expiresAt, isResend }),
   })
-}
 
 publicRouter.get('/invitations/:slug', publicLookupLimiter, async (req, res) => {
   const wedding = await findPublished(String(req.params.slug))
@@ -118,7 +115,7 @@ publicRouter.post('/invitations/:slug/rsvps', rsvpCreateLimiter, async (req, res
       editExpiresAt: editExpiry(wedding),
     })
     const link = editLink(token)
-    const emailSent = await sendEditLink(wedding, email, link, false)
+    const emailSent = await sendEditLink(wedding, rsvp, link, rsvp.editExpiresAt, false)
     res.status(201).json({ rsvp: rsvpDto(rsvp), editLink: link, editExpiresAt: rsvp.editExpiresAt, emailSent })
   } catch (err) {
     if (!isDuplicateKeyError(err)) throw err
@@ -126,10 +123,11 @@ publicRouter.post('/invitations/:slug/rsvps', rsvpCreateLimiter, async (req, res
     // Already replied. If email works, send a fresh private link to that address (never to the
     // requester's screen), and only then retire the old one so the guest is never left without a link.
     const existing = await Rsvp.findOne({ weddingId: wedding._id, email }).orFail()
-    const emailSent = await sendEditLink(wedding, email, editLink(token), true)
+    const expiresAt = editExpiry(wedding)
+    const emailSent = await sendEditLink(wedding, existing, editLink(token), expiresAt, true)
     if (emailSent) {
       existing.editTokenHash = tokenHash
-      existing.editExpiresAt = editExpiry(wedding)
+      existing.editExpiresAt = expiresAt
       existing.editRevokedAt = undefined
       await existing.save()
     }
