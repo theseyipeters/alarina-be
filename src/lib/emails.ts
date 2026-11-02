@@ -316,6 +316,103 @@ export function rsvpLinkEmail({
   })
 }
 
+/** Kobo → "₦25,000" */
+const naira = (kobo: number) =>
+  new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(kobo / 100)
+
+const coupleFooter = (w: WeddingInfo) => {
+  const names = coupleNames(w)
+  return `You’re getting this because you’re planning ${names ? `${names}’s` : 'a'} wedding on Alárinà.`
+}
+
+/** Tells a partner a guest has just replied. Changes to a reply afterwards aren't emailed. */
+export function rsvpReceivedEmail({
+  name,
+  wedding,
+  guestName,
+  attending,
+  comingSoFar,
+}: {
+  name: string
+  wedding: WeddingInfo
+  guestName: string
+  attending: boolean
+  comingSoFar: number
+}) {
+  const firstName = name.trim().split(/\s+/)[0]
+  const guestFirst = guestName.trim().split(/\s+/)[0]
+  const coming = `${comingSoFar} ${comingSoFar === 1 ? 'guest' : 'guests'}`
+  return render({
+    subject: attending ? `${guestName} is coming to your wedding` : `${guestName} can’t make it to your wedding`,
+    preheader: `${coming} coming so far.`,
+    eyebrow: 'New RSVP',
+    heading: attending ? `${guestFirst} is coming` : `${guestFirst} can’t make it`,
+    paragraphs: [
+      attending
+        ? `Hi ${firstName}, ${guestName} just replied to your invitation: they’re coming.`
+        : `Hi ${firstName}, ${guestName} just replied to your invitation: they can’t make it.`,
+    ],
+    details: [{ label: 'Coming so far', value: coming }],
+    action: { label: 'See all replies', url: `${env.CLIENT_ORIGIN}/app/responses` },
+    note: 'Guests can change their reply later with their private link. Any changes show on your Responses page.',
+    footer: coupleFooter(wedding),
+  })
+}
+
+type GiftLine = {
+  kind: 'cash' | 'aso_ebi' | 'wishlist'
+  amount: number
+  itemName?: string | null
+  unit?: string | null
+  unitPrice?: number | null
+  quantity?: number | null
+}
+
+const giftLineDetail = (l: GiftLine) => {
+  if (l.kind === 'cash') return { label: 'Cash gift', value: naira(l.amount) }
+  if (l.kind === 'aso_ebi') {
+    const qty = l.quantity && l.unit ? `${l.quantity} ${l.quantity === 1 ? l.unit : `${l.unit}s`} of ` : ''
+    return { label: 'Aso-ebi', value: `${qty}${l.itemName ?? 'an item'} · ${naira(l.amount)}` }
+  }
+  const part = l.unitPrice && l.amount < l.unitPrice ? ` towards ${naira(l.unitPrice)}` : ''
+  return { label: 'Wishlist', value: `${l.itemName ?? 'An item'} · ${naira(l.amount)}${part}` }
+}
+
+/** Tells a partner a guest's payment went through: what they gave, line by line. */
+export function giftReceivedEmail({
+  name,
+  wedding,
+  guestName,
+  lines,
+  amount,
+}: {
+  name: string
+  wedding: WeddingInfo
+  guestName: string
+  lines: GiftLine[]
+  amount: number
+}) {
+  const firstName = name.trim().split(/\s+/)[0]
+  const guestFirst = guestName.trim().split(/\s+/)[0]
+  // Open the tab for the first thing they gave; cash is the Gifts index.
+  const tab = { cash: '', aso_ebi: '/aso-ebi', wishlist: '/wishlist' }[lines[0]?.kind ?? 'cash']
+  const hasAsoEbi = lines.some((l) => l.kind === 'aso_ebi')
+  return render({
+    subject: `${guestName} sent you a gift`,
+    preheader: `${naira(amount)} from ${guestName}, through your invitation.`,
+    eyebrow: 'New gift',
+    heading: `${guestFirst} sent you a gift`,
+    paragraphs: [
+      `Hi ${firstName}, ${guestName} just gave you ${naira(amount)} through your invitation. It’s paid into your payout bank account on Paystack’s usual schedule.`,
+      ...(hasAsoEbi ? ['Their order includes aso-ebi. Their phone number is on your Aso-ebi page if you need to reach them about it.'] : []),
+    ],
+    details: [...lines.map(giftLineDetail), ...(lines.length > 1 ? [{ label: 'Total', value: naira(amount) }] : [])],
+    action: { label: 'See your gifts', url: `${env.CLIENT_ORIGIN}/app/gifts${tab}` },
+    note: 'Amounts are what you receive. Guests pay Paystack’s fee on top.',
+    footer: coupleFooter(wedding),
+  })
+}
+
 /** A new staff member's link to set their password for the admin app (or a fresh one). */
 export function staffSetupEmail({ name, invitedBy, link, expiresAt }: { name: string; invitedBy: string; link: string; expiresAt: Date }) {
   const firstName = name.trim().split(/\s+/)[0]

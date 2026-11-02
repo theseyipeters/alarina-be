@@ -2,10 +2,12 @@
 // Run from be/: yarn email:preview
 import { mkdirSync, writeFileSync } from 'node:fs'
 import {
+  giftReceivedEmail,
   partnerInviteEmail,
   passwordChangedEmail,
   passwordResetEmail,
   rsvpLinkEmail,
+  rsvpReceivedEmail,
   welcomeEmail,
   type RenderedEmail,
 } from '../lib/emails.js'
@@ -30,6 +32,20 @@ const emails: Record<string, RenderedEmail> = {
   'rsvp-attending': rsvpLinkEmail({ ...rsvp, attending: true, isResend: false }),
   'rsvp-declined': rsvpLinkEmail({ ...rsvp, attending: false, isResend: false }),
   'rsvp-resend': rsvpLinkEmail({ ...rsvp, attending: true, isResend: true }),
+  'couple-rsvp-attending': rsvpReceivedEmail({ name: 'Adaeze Okafor', wedding, guestName: 'Chidi Okeke', attending: true, comingSoFar: 42 }),
+  'couple-rsvp-declined': rsvpReceivedEmail({ name: 'Adaeze Okafor', wedding, guestName: 'Chidi Okeke', attending: false, comingSoFar: 1 }),
+  'couple-gift-cash': giftReceivedEmail({ name: 'Adaeze Okafor', wedding, guestName: 'Chidi Okeke', lines: [{ kind: 'cash', amount: 2500000 }], amount: 2500000 }),
+  'couple-gift-basket': giftReceivedEmail({
+    name: 'Tolu Adeyemi',
+    wedding,
+    guestName: 'Chidi Okeke',
+    lines: [
+      { kind: 'aso_ebi', amount: 4500000, itemName: 'Gold lace', unit: 'yard', unitPrice: 900000, quantity: 5 },
+      { kind: 'wishlist', amount: 5000000, itemName: 'Stand mixer', unitPrice: 18000000 },
+      { kind: 'cash', amount: 1000000 },
+    ],
+    amount: 10500000,
+  }),
 }
 
 mkdirSync(out, { recursive: true })

@@ -12,8 +12,9 @@ import { fundedByItem, MAX_WISHLIST_ITEMS, MIN_CONTRIBUTION } from '../lib/wishl
 import { rsvpLinkEmail } from '../lib/emails.js'
 import { invitationContent, rsvpStatus, type Wedding as WeddingRecord } from '../lib/invitation.js'
 import { sendMail } from '../lib/mailer.js'
+import { notifyRsvp } from '../lib/notify.js'
 import { initializeTransaction, paystackConfigured, verifyTransaction } from '../lib/paystack.js'
-import { settle } from '../lib/settle.js'
+import { settleGift } from '../lib/settle.js'
 import { isSuspended } from '../lib/suspension.js'
 import { hashToken, newToken } from '../lib/tokens.js'
 import { giftCreateLimiter, publicLookupLimiter, rsvpCreateLimiter } from '../middleware/rateLimit.js'
@@ -154,6 +155,7 @@ publicRouter.post('/invitations/:slug/rsvps', rsvpCreateLimiter, async (req, res
     })
     const link = editLink(token)
     const emailSent = await sendEditLink(wedding, rsvp, link, rsvp.editExpiresAt, false)
+    notifyRsvp(wedding, rsvp)
     res.status(201).json({ rsvp: rsvpDto(rsvp), editLink: link, editExpiresAt: rsvp.editExpiresAt, emailSent })
   } catch (err) {
     if (!isDuplicateKeyError(err)) throw err
@@ -331,7 +333,7 @@ publicRouter.get('/gifts/:reference', publicLookupLimiter, async (req, res) => {
   const wedding = gift && (await Wedding.findById(gift.weddingId))
   if (!gift || !wedding) throw new HttpError(404, 'We couldn’t find that gift', 'gift_not_found')
 
-  if (gift.status === 'pending') await settle(gift, await verifyTransaction(gift.reference))
+  if (gift.status === 'pending') await settleGift(gift, await verifyTransaction(gift.reference))
 
   res.json({
     gift: {
