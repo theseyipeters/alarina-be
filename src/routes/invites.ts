@@ -44,7 +44,7 @@ invitesRouter.post('/:token/accept', requireAuth, inviteLookupLimiter, async (re
     const invite = await Invite.findOneAndUpdate(
       usable(tokenHash),
       { usedAt: new Date(), usedBy: user._id },
-      { session, new: true },
+      { session, returnDocument: 'after' },
     )
     if (!invite) throw invalidInvite()
 
@@ -79,7 +79,7 @@ invitesRouter.post('/:token/accept', requireAuth, inviteLookupLimiter, async (re
     const joined = await Couple.findOneAndUpdate(
       { _id: invite.coupleId, 'members.1': { $exists: false } },
       { $push: { members: user._id } },
-      { session, new: true },
+      { session, returnDocument: 'after' },
     )
     if (!joined) throw new HttpError(409, 'This couple space already has two partners', 'couple_full')
 

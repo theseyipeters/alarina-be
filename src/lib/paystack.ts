@@ -29,8 +29,16 @@ async function call<T>(method: 'GET' | 'POST' | 'PUT', path: string, body?: unkn
   const json = (await res.json().catch(() => null)) as Envelope<T> | null
   if (!res.ok || !json?.status) {
     logger.warn({ status: res.status, path, message: json?.message }, 'Paystack rejected a request')
-    // Account lookups fail with 4xx when the details are wrong; say so instead of "unavailable".
-    if (res.status >= 400 && res.status < 500 && path.startsWith('/bank/resolve')) {
+    // A rejected key is a server setup problem, not the couple's mistake: say so plainly.
+    if (res.status === 401 || res.status === 403) {
+      throw new HttpError(
+        503,
+        'Payments aren’t set up correctly on this server: Paystack rejected the API key.',
+        'payments_misconfigured',
+      )
+    }
+    // Account lookups fail with 400/422 when the details are wrong.
+    if ((res.status === 400 || res.status === 422) && path.startsWith('/bank/resolve')) {
       throw new HttpError(422, 'That account number doesn’t match this bank', 'account_not_found')
     }
     throw unavailable()

@@ -22,7 +22,25 @@ export function createApp() {
   const app = express()
 
   app.disable('x-powered-by')
-  app.use(pinoHttp({ logger }))
+  // One line per request ("POST /api/auth/signin 401 45ms · invalid_credentials"). Headers
+  // (cookies, auth) are never logged. Only unexpected crashes carry a stack trace: the error
+  // handler hands those over as res.err; expected HttpErrors just add their code.
+  const line = (req: express.Request, res: express.Response, ms?: number) =>
+    `${req.method} ${req.originalUrl} ${res.statusCode}${ms === undefined ? '' : ` ${Math.round(ms)}ms`}${
+      res.locals.errorCode ? ` · ${res.locals.errorCode}` : ''
+    }`
+  app.use(
+    pinoHttp({
+      logger,
+      serializers: { req: () => undefined, res: () => undefined },
+      customLogLevel: (_req, res) => (res.statusCode >= 500 ? 'error' : res.statusCode >= 400 ? 'warn' : 'info'),
+      customSuccessMessage: (req, res, ms) => line(req as express.Request, res as express.Response, ms),
+      customErrorMessage: (req, res) => line(req as express.Request, res as express.Response),
+      // Drop pino-http's synthetic "failed with status code" error for expected failures.
+      customErrorObject: (_req, res, _err, val) => (res.err ? val : { ...val, err: undefined }),
+      quietReqLogger: true,
+    }),
+  )
   app.use(helmet())
   app.use(cors({ origin: env.CLIENT_ORIGIN, credentials: true }))
   // Before the JSON parser: webhooks need the raw body to check their signature.

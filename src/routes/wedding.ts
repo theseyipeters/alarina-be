@@ -120,7 +120,7 @@ weddingRouter.patch('/', async (req, res) => {
   const save = () =>
     Wedding.findOneAndUpdate({ coupleId }, update, {
       upsert: true,
-      new: true,
+      returnDocument: 'after',
       setDefaultsOnInsert: true,
       runValidators: true,
     }).orFail()

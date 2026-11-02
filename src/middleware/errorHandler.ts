@@ -7,7 +7,7 @@ export const notFoundHandler: RequestHandler = (_req, _res, next) => {
   next(notFound('Route not found'))
 }
 
-export const errorHandler: ErrorRequestHandler = (err, req, res, next) => {
+export const errorHandler: ErrorRequestHandler = (err, _req, res, next) => {
   if (res.headersSent) return next(err)
 
   if (err instanceof z.ZodError) {
@@ -18,6 +18,8 @@ export const errorHandler: ErrorRequestHandler = (err, req, res, next) => {
   }
 
   if (err instanceof HttpError) {
+    // Expected failure: the request log line shows its code, without a stack trace.
+    res.locals.errorCode = err.code
     res.status(err.status).json({
       error: { code: err.code ?? 'error', message: err.message, ...(err.details !== undefined && { details: err.details }) },
     })
@@ -30,7 +32,8 @@ export const errorHandler: ErrorRequestHandler = (err, req, res, next) => {
     return
   }
 
-  req.log.error(err)
+  // Unexpected: hand the real error to the request logger, which prints it with its stack.
+  res.err = err
   res.status(500).json({
     error: {
       code: 'internal_error',

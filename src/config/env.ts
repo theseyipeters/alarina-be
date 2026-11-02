@@ -12,7 +12,11 @@ const schema = z.object({
   RESEND_API_KEY: z.string().min(1).optional(),
   MAIL_FROM: z.string().min(1).optional(),
   // Paystack. Without a secret key, cash gifts are switched off everywhere.
-  PAYSTACK_SECRET_KEY: z.string().min(1).optional(),
+  // Secret keys start with sk_test_ or sk_live_; catching a typo here beats a vague "Invalid key" later.
+  PAYSTACK_SECRET_KEY: z
+    .string()
+    .regex(/^sk_(test|live)_[A-Za-z0-9]+$/, 'should look like sk_test_… or sk_live_… (check for stray characters)')
+    .optional(),
   PAYSTACK_BASE_URL: z.url().default('https://api.paystack.co'),
   // Set to true only after checking that the fee maths in lib/fees.ts matches this Paystack
   // account's pricing. Until then couples can't switch gifts on.
