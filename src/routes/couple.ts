@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { z } from 'zod'
 import { env } from '../config/env.js'
+import { partnerInviteEmail } from '../lib/emails.js'
 import { HttpError } from '../lib/httpError.js'
 import { sendMail } from '../lib/mailer.js'
 import { coupleDto, loadCouple } from '../lib/serializers.js'
@@ -41,11 +42,7 @@ coupleRouter.post('/invites', inviteCreateLimiter, async (req, res) => {
 
   const link = `${env.CLIENT_ORIGIN}/partner/accept/${token}`
   const emailSent = email
-    ? await sendMail({
-        to: email,
-        subject: `${user.name} invited you to plan your wedding on Alárinà`,
-        text: `${user.name} invited you to plan your wedding together on Alárinà.\n\nAccept the invite: ${link}\n\nThis link works once and expires on ${expiresAt.toDateString()}.`,
-      })
+    ? await sendMail({ to: email, ...partnerInviteEmail({ inviterName: user.name, link, expiresAt }) })
     : false
 
   res.status(201).json({ link, expiresAt, emailSent })

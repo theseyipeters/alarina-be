@@ -8,7 +8,7 @@ const schema = z.object({
   CLIENT_ORIGIN: z.url(),
   SESSION_TTL_DAYS: z.coerce.number().int().positive().default(30),
   INVITE_TTL_DAYS: z.coerce.number().int().positive().default(7),
-  // Optional: without these, partner invites are not emailed (the link is still returned)
+  // Optional: without these, partner invites and RSVP links are not emailed (the link is still shown)
   RESEND_API_KEY: z.string().min(1).optional(),
   MAIL_FROM: z.string().min(1).optional(),
   // Paystack. Without a secret key, cash gifts are switched off everywhere.
