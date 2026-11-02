@@ -1,4 +1,5 @@
 import { logger } from '../config/logger.js'
+import { notifyGift } from './notify.js'
 import type { VerifiedTransaction } from './paystack.js'
 
 /**
@@ -30,5 +31,13 @@ export async function settle<T extends Payment>(gift: T, tx: VerifiedTransaction
     gift.status = tx.status
   }
   await gift.save()
+  return gift
+}
+
+/** Settles a guest's payment, and tells the couple when it's just gone through. */
+export async function settleGift<T extends Payment & { _id: unknown }>(gift: T, tx: VerifiedTransaction): Promise<T> {
+  const before = gift.status
+  await settle(gift, tx)
+  if (before !== 'success' && gift.status === 'success') notifyGift(gift)
   return gift
 }

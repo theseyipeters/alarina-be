@@ -3,7 +3,7 @@ import express, { Router } from 'express'
 import { env } from '../config/env.js'
 import { logger } from '../config/logger.js'
 import { verifyTransaction } from '../lib/paystack.js'
-import { settle } from '../lib/settle.js'
+import { settle, settleGift } from '../lib/settle.js'
 import { applyUnlock } from '../lib/unlock.js'
 import { Contribution } from '../models/contribution.js'
 import { GiftUnlock } from '../models/giftUnlock.js'
@@ -33,7 +33,7 @@ webhooksRouter.post('/paystack', express.raw({ type: '*/*', limit: '200kb' }), a
     const gift = await Contribution.findOne({ reference })
     if (gift) {
       // Don't trust the event body for the outcome; ask Paystack directly.
-      await settle(gift, await verifyTransaction(reference))
+      await settleGift(gift, await verifyTransaction(reference))
     } else {
       const unlock = await GiftUnlock.findOne({ reference })
       if (unlock) {

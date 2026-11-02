@@ -4,7 +4,7 @@ import { z } from 'zod'
 import { audit } from '../../lib/audit.js'
 import { HttpError } from '../../lib/httpError.js'
 import { paystackConfigured, verifyTransaction } from '../../lib/paystack.js'
-import { settle } from '../../lib/settle.js'
+import { settle, settleGift } from '../../lib/settle.js'
 import { applyUnlock } from '../../lib/unlock.js'
 import { Contribution, linesOf } from '../../models/contribution.js'
 import { GiftUnlock } from '../../models/giftUnlock.js'
@@ -146,7 +146,7 @@ adminPaymentsRouter.post('/payments/:type/:id/recheck', async (req, res) => {
 
   const before = payment.status
   const tx = await verifyTransaction(payment.reference)
-  await settle(payment, tx)
+  await (type === 'gifts' ? settleGift(payment, tx) : settle(payment, tx))
   if (type === 'unlocks') await applyUnlock(payment as InstanceType<typeof GiftUnlock>)
 
   const wedding = await Wedding.findById(payment.weddingId).select('coupleId partnerOneName partnerTwoName')

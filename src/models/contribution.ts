@@ -35,6 +35,8 @@ const contributionSchema = new Schema(
     reference: { type: String, required: true, unique: true },
     status: { type: String, enum: ['pending', 'success', 'failed', 'abandoned'], default: 'pending', required: true },
     paidAt: Date,
+    // When the couple was emailed about this payment. Claimed atomically, so they're told once.
+    coupleNotifiedAt: Date,
   },
   { timestamps: true },
 )
