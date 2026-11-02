@@ -6,6 +6,8 @@ const userSchema = new Schema(
     name: { type: String, required: true, trim: true },
     passwordHash: { type: String, required: true },
     coupleId: { type: Schema.Types.ObjectId, ref: 'Couple', required: true },
+    // When they finished or skipped the dashboard tour. Per person, so a partner who joins later gets it too.
+    tourCompletedAt: { type: Date },
   },
   { timestamps: true },
 )

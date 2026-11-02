@@ -2,11 +2,14 @@ import { Router } from 'express'
 import mongoose from 'mongoose'
 import { z } from 'zod'
 import { isDuplicateKeyError, withTransaction } from '../db/transaction.js'
+import { welcomeEmail } from '../lib/emails.js'
 import { HttpError } from '../lib/httpError.js'
+import { sendMail } from '../lib/mailer.js'
 import { hashPassword, verifyPassword } from '../lib/password.js'
 import { coupleDto, loadCouple, userDto } from '../lib/serializers.js'
 import { clearSessionCookie, SESSION_COOKIE, startSession } from '../lib/sessions.js'
 import { hashToken } from '../lib/tokens.js'
+import { requireAuth } from '../middleware/auth.js'
 import { authLimiter } from '../middleware/rateLimit.js'
 import { Couple } from '../models/couple.js'
 import { Session } from '../models/session.js'
@@ -46,6 +49,18 @@ authRouter.post('/signup', authLimiter, async (req, res) => {
   const user = await User.findById(userId).orFail()
   const couple = await loadCouple(coupleId).orFail()
   res.status(201).json({ user: userDto(user), couple: await coupleDto(couple, userId) })
+
+  // After responding, so sign-up never waits on the email provider. sendMail never throws.
+  void sendMail({ to: user.email, ...welcomeEmail({ name: user.name }) })
+})
+
+// The dashboard tour was finished or skipped. Kept on the server so it isn't shown again on another device.
+authRouter.post('/tour', requireAuth, async (req, res) => {
+  const { user } = req.auth!
+  user.tourCompletedAt ??= new Date()
+  await user.save()
+  const couple = await loadCouple(user.coupleId).orFail()
+  res.json({ user: userDto(user), couple: await coupleDto(couple, user._id) })
 })
 
 authRouter.post('/signin', authLimiter, async (req, res) => {

@@ -7,6 +7,7 @@ export const userDto = (user: HydratedDocument<UserDoc>) => ({
   id: String(user._id),
   name: user.name,
   email: user.email,
+  tourCompletedAt: user.tourCompletedAt ?? null,
 })
 
 /** The signed-in user's view of their couple space: who the partner is, or whether an invite is pending. */
