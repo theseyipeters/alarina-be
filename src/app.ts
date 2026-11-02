@@ -18,6 +18,7 @@ import { imagesRouter, publicImagesRouter } from './routes/images.js'
 import { invitesRouter } from './routes/invites.js'
 import { publicRouter } from './routes/public.js'
 import { webhooksRouter } from './routes/webhooks.js'
+import { unlockRouter } from './routes/unlock.js'
 import { weddingRouter } from './routes/wedding.js'
 import { wishlistRouter } from './routes/wishlist.js'
 
@@ -63,6 +64,7 @@ export function createApp() {
   api.use('/invites', invitesRouter)
   api.use('/wedding', weddingRouter)
   api.use('/wedding', guestsRouter)
+  api.use('/wedding', unlockRouter)
   api.use('/wedding', imagesRouter)
   api.use('/wedding', giftsRouter)
   api.use('/wedding', asoEbiRouter)

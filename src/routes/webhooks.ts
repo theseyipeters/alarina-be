@@ -4,7 +4,9 @@ import { env } from '../config/env.js'
 import { logger } from '../config/logger.js'
 import { verifyTransaction } from '../lib/paystack.js'
 import { settle } from '../lib/settle.js'
+import { applyUnlock } from '../lib/unlock.js'
 import { Contribution } from '../models/contribution.js'
+import { GiftUnlock } from '../models/giftUnlock.js'
 
 // Paystack calls this server-to-server, so it sits outside the origin check and needs the raw
 // body to verify the signature (HMAC-SHA512 of the body with the secret key).
@@ -33,7 +35,13 @@ webhooksRouter.post('/paystack', express.raw({ type: '*/*', limit: '200kb' }), a
       // Don't trust the event body for the outcome; ask Paystack directly.
       await settle(gift, await verifyTransaction(reference))
     } else {
-      logger.warn({ reference }, 'Webhook for an unknown gift reference')
+      const unlock = await GiftUnlock.findOne({ reference })
+      if (unlock) {
+        await settle(unlock, await verifyTransaction(reference))
+        await applyUnlock(unlock)
+      } else {
+        logger.warn({ reference }, 'Webhook for an unknown payment reference')
+      }
     }
   }
   // Always 200 for a genuine event, so Paystack doesn't keep retrying ones we don't use.

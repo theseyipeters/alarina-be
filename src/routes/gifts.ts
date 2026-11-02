@@ -11,6 +11,7 @@ import {
   updateSubaccount,
 } from '../lib/paystack.js'
 import { requireAuth } from '../middleware/auth.js'
+import { requireGiftsUnlocked } from '../middleware/giftsUnlocked.js'
 import { accountLookupLimiter } from '../middleware/rateLimit.js'
 import { Contribution, hasCash, linesOf, type ContributionDoc } from '../models/contribution.js'
 import { Wedding } from '../models/wedding.js'
@@ -19,6 +20,7 @@ import { Wedding } from '../models/wedding.js'
 export const giftsRouter = Router()
 
 giftsRouter.use(requireAuth)
+giftsRouter.use('/gifts', requireGiftsUnlocked)
 
 export async function ownWedding(coupleId: Types.ObjectId) {
   const wedding = await Wedding.findOne({ coupleId })

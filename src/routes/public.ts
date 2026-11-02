@@ -66,15 +66,15 @@ const invitationDto = async (w: WeddingRecord) => {
 }
 
 /** Guests are offered a gift only when the couple switched it on and payouts are ready. */
-const giftsOpen = (w: WeddingRecord) => w.giftsEnabled && Boolean(w.payout?.subaccountCode) && paystackConfigured()
+const giftsOpen = (w: WeddingRecord) => Boolean(w.giftsUnlockedAt) && w.giftsEnabled && Boolean(w.payout?.subaccountCode) && paystackConfigured()
 
 /** Aso-ebi is offered when it's switched on, has something to buy, and payouts are ready. */
 const asoEbiOpen = (w: WeddingRecord) =>
-  w.asoEbiEnabled && w.asoEbiItems.length > 0 && Boolean(w.payout?.subaccountCode) && paystackConfigured()
+  Boolean(w.giftsUnlockedAt) && w.asoEbiEnabled && w.asoEbiItems.length > 0 && Boolean(w.payout?.subaccountCode) && paystackConfigured()
 
 /** The wishlist is offered when it's switched on, has something on it, and payouts are ready. */
 const wishlistOpen = (w: WeddingRecord) =>
-  w.wishlistEnabled && w.wishlistItems.length > 0 && Boolean(w.payout?.subaccountCode) && paystackConfigured()
+  Boolean(w.giftsUnlockedAt) && w.wishlistEnabled && w.wishlistItems.length > 0 && Boolean(w.payout?.subaccountCode) && paystackConfigured()
 
 const rsvpDto = (r: HydratedDocument<RsvpDoc>) => ({
   name: r.name,

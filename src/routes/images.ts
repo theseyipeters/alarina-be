@@ -3,6 +3,7 @@ import { isValidObjectId } from 'mongoose'
 import { HttpError } from '../lib/httpError.js'
 import { MAX_IMAGE_BYTES, MAX_IMAGES_PER_WEDDING, sniffImage } from '../lib/itemImages.js'
 import { requireAuth } from '../middleware/auth.js'
+import { requireGiftsUnlocked } from '../middleware/giftsUnlocked.js'
 import { ItemImage } from '../models/itemImage.js'
 import { ownWedding } from './gifts.js'
 import { imageUploadLimiter } from '../middleware/rateLimit.js'
@@ -13,6 +14,7 @@ export const imagesRouter = Router()
 imagesRouter.post(
   '/gifts/images',
   requireAuth,
+  requireGiftsUnlocked,
   imageUploadLimiter,
   express.raw({ type: ['image/jpeg', 'image/png', 'image/webp'], limit: MAX_IMAGE_BYTES }),
   async (req, res) => {

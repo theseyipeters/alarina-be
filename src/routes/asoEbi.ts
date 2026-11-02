@@ -7,6 +7,7 @@ import { HttpError } from '../lib/httpError.js'
 import { paystackConfigured } from '../lib/paystack.js'
 import { assertOwnImage, deleteImage } from '../lib/itemImages.js'
 import { requireAuth } from '../middleware/auth.js'
+import { requireGiftsUnlocked } from '../middleware/giftsUnlocked.js'
 import { Contribution, hasAsoEbi, type ContributionDoc } from '../models/contribution.js'
 import { ownWedding } from './gifts.js'
 
@@ -14,6 +15,7 @@ import { ownWedding } from './gifts.js'
 export const asoEbiRouter = Router()
 
 asoEbiRouter.use(requireAuth)
+asoEbiRouter.use('/gifts', requireGiftsUnlocked)
 
 const itemInput = z.strictObject({
   // The id of an uploaded photo, or null for none.

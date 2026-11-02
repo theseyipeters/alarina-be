@@ -80,6 +80,8 @@ const weddingSchema = new Schema(
       ),
       required: false,
     },
+    // Set when the couple has paid the one-time fee to use Gifts. Nothing in Gifts works before.
+    giftsUnlockedAt: Date,
     // Switches cash gifts on for guests. Aso-ebi has its own switch below.
     giftsEnabled: { type: Boolean, default: false, required: true },
     asoEbiEnabled: { type: Boolean, default: false, required: true },

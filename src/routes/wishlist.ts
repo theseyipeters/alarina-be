@@ -7,6 +7,7 @@ import { paystackConfigured } from '../lib/paystack.js'
 import { fundedByItem, MAX_WISH_PRICE_NAIRA, MAX_WISHLIST_ITEMS, MIN_WISH_PRICE_NAIRA } from '../lib/wishlist.js'
 import { assertOwnImage, deleteImage } from '../lib/itemImages.js'
 import { requireAuth } from '../middleware/auth.js'
+import { requireGiftsUnlocked } from '../middleware/giftsUnlocked.js'
 import { Contribution, hasWishlist, type ContributionDoc } from '../models/contribution.js'
 import { ownWedding } from './gifts.js'
 
@@ -14,6 +15,7 @@ import { ownWedding } from './gifts.js'
 export const wishlistRouter = Router()
 
 wishlistRouter.use(requireAuth)
+wishlistRouter.use('/gifts', requireGiftsUnlocked)
 
 const itemInput = z.strictObject({
   // The id of an uploaded photo, or null for none.

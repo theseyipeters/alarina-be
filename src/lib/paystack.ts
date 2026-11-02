@@ -78,7 +78,8 @@ export const initializeTransaction = (input: {
   email: string
   amount: number
   reference: string
-  subaccount: string
+  /** The couple's subaccount for gifts. Left out for payments to Alárinà itself. */
+  subaccount?: string
   callback_url: string
   metadata: Record<string, unknown>
 }) =>
@@ -87,7 +88,7 @@ export const initializeTransaction = (input: {
   call<{ authorization_url: string; reference: string }>('POST', '/transaction/initialize', {
     ...input,
     currency: 'NGN',
-    bearer: 'subaccount',
+    ...(input.subaccount && { bearer: 'subaccount' }),
   })
 
 export type VerifiedTransaction = { status: string; amount: number; currency: string; reference: string; paid_at: string | null }
