@@ -315,3 +315,21 @@ export function rsvpLinkEmail({
     footer,
   })
 }
+
+/** A new staff member's link to set their password for the admin app (or a fresh one). */
+export function staffSetupEmail({ name, invitedBy, link, expiresAt }: { name: string; invitedBy: string; link: string; expiresAt: Date }) {
+  const firstName = name.trim().split(/\s+/)[0]
+  return render({
+    subject: 'Set up your Alárinà staff account',
+    preheader: `Choose a password for the admin app. The link works once, until ${lagosDate(expiresAt)}.`,
+    eyebrow: 'Staff account',
+    heading: `Welcome to the team, ${firstName}`,
+    paragraphs: [
+      `${invitedBy} added you as Alárinà staff. The admin app lets you look after couples, payments and support requests.`,
+      'Choose a password to finish setting up your account.',
+    ],
+    action: { label: 'Choose a password', url: link },
+    note: `This link works once and expires on ${lagosDate(expiresAt)}. Weren’t expecting this? You can ignore this email.`,
+    footer: `You’re getting this because ${invitedBy} entered your email address in the Alárinà admin app.`,
+  })
+}

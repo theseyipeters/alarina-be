@@ -14,6 +14,7 @@ import { invitationContent, rsvpStatus, type Wedding as WeddingRecord } from '..
 import { sendMail } from '../lib/mailer.js'
 import { initializeTransaction, paystackConfigured, verifyTransaction } from '../lib/paystack.js'
 import { settle } from '../lib/settle.js'
+import { isSuspended } from '../lib/suspension.js'
 import { hashToken, newToken } from '../lib/tokens.js'
 import { giftCreateLimiter, publicLookupLimiter, rsvpCreateLimiter } from '../middleware/rateLimit.js'
 import { Contribution, linesOf, type Line } from '../models/contribution.js'
@@ -91,7 +92,11 @@ const editLink = (token: string) => `${env.CLIENT_ORIGIN}/rsvp/${token}`
 const editExpiry = (w: WeddingRecord) =>
   w.date ? new Date(`${w.date}T23:59:59+01:00`) : new Date(Date.now() + 180 * DAY)
 
-const findPublished = (slug: string) => Wedding.findOne({ slug, status: 'published' })
+/** A published invitation, unless staff have suspended the couple (then it's simply not found). */
+async function findPublished(slug: string) {
+  const wedding = await Wedding.findOne({ slug, status: 'published' })
+  return wedding && !(await isSuspended(wedding.coupleId)) ? wedding : null
+}
 
 /** Emails the guest their private link. `isResend`: they'd already replied, so it's a fresh one. */
 const sendEditLink = (wedding: WeddingRecord, rsvp: RsvpDoc, link: string, expiresAt: Date, isResend: boolean) =>
@@ -175,7 +180,7 @@ async function findByEditToken(token: string) {
     editExpiresAt: { $gt: new Date() },
   })
   const wedding = rsvp && (await Wedding.findOne({ _id: rsvp.weddingId, status: 'published' }))
-  if (!rsvp || !wedding) throw linkInvalid()
+  if (!rsvp || !wedding || (await isSuspended(wedding.coupleId))) throw linkInvalid()
   return { rsvp, wedding }
 }
 

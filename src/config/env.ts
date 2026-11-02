@@ -6,6 +6,9 @@ const schema = z.object({
   PORT: z.coerce.number().int().positive().default(5001),
   MONGODB_URI: z.string().min(1),
   CLIENT_ORIGIN: z.url(),
+  // Origin of the staff admin app (admin/). Without it the admin API is switched off.
+  ADMIN_ORIGIN: z.url().optional(),
+  ADMIN_SESSION_TTL_HOURS: z.coerce.number().int().positive().default(12),
   SESSION_TTL_DAYS: z.coerce.number().int().positive().default(30),
   INVITE_TTL_DAYS: z.coerce.number().int().positive().default(7),
   // Optional: without these, partner invites and RSVP links are not emailed (the link is still shown)

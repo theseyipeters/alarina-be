@@ -7,6 +7,9 @@ const coupleSchema = new Schema(
       type: [{ type: Schema.Types.ObjectId, ref: 'User' }],
       validate: (v: unknown[]) => v.length >= 1 && v.length <= 2,
     },
+    // Set by Alárinà staff. A suspended couple can't sign in, and their invitation is offline.
+    suspendedAt: Date,
+    suspendedReason: String,
   },
   { timestamps: true },
 )
