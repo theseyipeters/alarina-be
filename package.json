@@ -4,11 +4,13 @@
   "version": "0.0.0",
   "type": "module",
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "scripts": {
+    "predev": "node scripts/check-node.mjs",
     "dev": "tsx watch src/server.ts",
     "build": "tsc -p tsconfig.build.json",
+    "prestart": "node scripts/check-node.mjs",
     "start": "node dist/server.js",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
@@ -41,5 +43,6 @@
     "tsx": "^4.23.15",
     "typescript": "~6.0",
     "typescript-eslint": "^8.72.1"
-  }
+  },
+  "packageManager": "yarn@1.22.22+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e"
 }

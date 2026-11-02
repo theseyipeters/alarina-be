@@ -3,7 +3,7 @@ import { z } from 'zod'
 
 const schema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
-  PORT: z.coerce.number().int().positive().default(4000),
+  PORT: z.coerce.number().int().positive().default(5001),
   MONGODB_URI: z.string().min(1),
   CLIENT_ORIGIN: z.url(),
   SESSION_TTL_DAYS: z.coerce.number().int().positive().default(30),

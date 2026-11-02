@@ -77,6 +77,8 @@ const createBody = z.object({
   email: z.email().max(254),
   phone,
   attending: z.boolean(),
+  // Share code from a partner's personal link. Unknown codes are ignored, not rejected.
+  from: z.string().trim().max(32).optional(),
 })
 
 publicRouter.post('/invitations/:slug/rsvps', rsvpCreateLimiter, async (req, res) => {
@@ -92,8 +94,9 @@ publicRouter.post('/invitations/:slug/rsvps', rsvpCreateLimiter, async (req, res
     )
   }
 
-  const input = createBody.parse(req.body)
+  const { from, ...input } = createBody.parse(req.body)
   const email = input.email.toLowerCase()
+  const side = from ? wedding.shareLinks.find((l) => l.code === from) : undefined
   const { token, tokenHash } = newToken()
 
   try {
@@ -101,6 +104,7 @@ publicRouter.post('/invitations/:slug/rsvps', rsvpCreateLimiter, async (req, res
       ...input,
       email,
       weddingId: wedding._id,
+      ...(side && { sideUserId: side.userId, sideSource: 'link' }),
       editTokenHash: tokenHash,
       editExpiresAt: editExpiry(wedding),
     })

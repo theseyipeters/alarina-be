@@ -39,6 +39,13 @@ const weddingSchema = new Schema(
     rsvpDeadline: String,
     events: { type: [eventSchema], default: [] },
 
+    // Each partner's personal share link (/invite/:slug?from=code). Replies through it are
+    // attributed to that partner's side. Attribution is by link, not verified identity.
+    shareLinks: {
+      type: [{ _id: false, userId: { type: Schema.Types.ObjectId, ref: 'User', required: true }, code: String }],
+      default: [],
+    },
+
     template: { type: String, enum: TEMPLATES, default: 'classic', required: true },
     palette: { type: String, enum: PALETTES, default: 'ivory', required: true },
   },
@@ -46,6 +53,10 @@ const weddingSchema = new Schema(
 )
 
 weddingSchema.index({ slug: 1 }, { unique: true, partialFilterExpression: { slug: { $type: 'string' } } })
+weddingSchema.index(
+  { 'shareLinks.code': 1 },
+  { unique: true, partialFilterExpression: { 'shareLinks.code': { $type: 'string' } } },
+)
 
 export type WeddingDoc = InferSchemaType<typeof weddingSchema>
 export const Wedding = model('Wedding', weddingSchema)

@@ -10,6 +10,7 @@ import { errorHandler, notFoundHandler } from './middleware/errorHandler.js'
 import { enforceOrigin } from './middleware/origin.js'
 import { authRouter } from './routes/auth.js'
 import { coupleRouter } from './routes/couple.js'
+import { guestsRouter } from './routes/guests.js'
 import { healthRouter } from './routes/health.js'
 import { invitesRouter } from './routes/invites.js'
 import { publicRouter } from './routes/public.js'
@@ -33,6 +34,7 @@ export function createApp() {
   api.use('/couple', coupleRouter)
   api.use('/invites', invitesRouter)
   api.use('/wedding', weddingRouter)
+  api.use('/wedding', guestsRouter)
   api.use('/public', publicRouter)
   app.use('/api', api)
 
