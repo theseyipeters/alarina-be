@@ -1,10 +1,11 @@
 import { type InferSchemaType, type QueryFilter, Schema, model } from 'mongoose'
 
 // One thing a guest gave within a payment. `amount` is what the couple receives for it, in kobo.
-// An aso-ebi line keeps the item as it stood at checkout, so later edits to the item don't change it.
+// An aso-ebi or wishlist line keeps the item as it stood at checkout, so later edits don't change it.
+// For a wishlist line `amount` is the part of the item's price the guest paid.
 const lineSchema = new Schema(
   {
-    kind: { type: String, enum: ['cash', 'aso_ebi'], required: true },
+    kind: { type: String, enum: ['cash', 'aso_ebi', 'wishlist'], required: true },
     amount: { type: Number, required: true },
     itemId: String,
     itemName: String,
@@ -52,4 +53,5 @@ export const linesOf = (c: Pick<ContributionDoc, 'lines' | 'amount'>): Line[] =>
 export const hasCash = {
   $or: [{ lines: { $exists: false } }, { lines: { $size: 0 } }, { 'lines.kind': 'cash' }],
 } as QueryFilter<ContributionDoc>
+export const hasWishlist = { 'lines.kind': 'wishlist' } as QueryFilter<ContributionDoc>
 export const hasAsoEbi = { 'lines.kind': 'aso_ebi' } as QueryFilter<ContributionDoc>

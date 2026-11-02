@@ -21,6 +21,15 @@ const asoEbiItemSchema = new Schema({
   name: { type: String, required: true },
   description: String,
   unit: { type: String, enum: ASO_EBI_UNITS, required: true },
+  imageId: String,
+  price: { type: Number, required: true },
+})
+
+// Something on the couple's wishlist. The price is in kobo.
+const wishlistItemSchema = new Schema({
+  name: { type: String, required: true },
+  description: String,
+  imageId: String,
   price: { type: Number, required: true },
 })
 
@@ -75,6 +84,8 @@ const weddingSchema = new Schema(
     giftsEnabled: { type: Boolean, default: false, required: true },
     asoEbiEnabled: { type: Boolean, default: false, required: true },
     asoEbiItems: { type: [asoEbiItemSchema], default: [] },
+    wishlistEnabled: { type: Boolean, default: false, required: true },
+    wishlistItems: { type: [wishlistItemSchema], default: [] },
 
     template: { type: String, enum: TEMPLATES, default: 'classic', required: true },
     palette: { type: String, enum: PALETTES, default: 'ivory', required: true },

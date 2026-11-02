@@ -25,3 +25,4 @@ export const rsvpCreateLimiter = limiter(15 * MINUTE, 20, 'Too many replies from
 export const publicLookupLimiter = limiter(15 * MINUTE, 120, 'Too many requests. Try again in a few minutes.')
 export const giftCreateLimiter = limiter(15 * MINUTE, 20, 'Too many gift attempts. Try again in a few minutes.')
 export const accountLookupLimiter = limiter(60 * MINUTE, 30, 'Too many account checks. Try again later.', true)
+export const imageUploadLimiter = limiter(60 * MINUTE, 60, 'Too many photo uploads. Try again later.', true)

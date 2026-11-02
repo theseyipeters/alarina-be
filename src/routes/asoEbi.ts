@@ -5,6 +5,7 @@ import { env } from '../config/env.js'
 import { ASO_EBI_UNITS, MAX_ITEMS, MAX_PRICE_NAIRA, MIN_PRICE_NAIRA } from '../lib/asoEbi.js'
 import { HttpError } from '../lib/httpError.js'
 import { paystackConfigured } from '../lib/paystack.js'
+import { assertOwnImage, deleteImage } from '../lib/itemImages.js'
 import { requireAuth } from '../middleware/auth.js'
 import { Contribution, hasAsoEbi, type ContributionDoc } from '../models/contribution.js'
 import { ownWedding } from './gifts.js'
@@ -15,6 +16,8 @@ export const asoEbiRouter = Router()
 asoEbiRouter.use(requireAuth)
 
 const itemInput = z.strictObject({
+  // The id of an uploaded photo, or null for none.
+  imageId: z.string().regex(/^[a-f0-9]{24}$/).nullable(),
   name: z.string().trim().min(1).max(60),
   // An empty description clears it.
   description: z.string().trim().max(300),
@@ -57,6 +60,7 @@ asoEbiRouter.get('/gifts/aso-ebi', async (req, res) => {
       id: String(item._id),
       name: item.name,
       description: item.description ?? '',
+      imageId: item.imageId ?? null,
       unit: item.unit,
       price: item.price,
       sold: paid.filter((o) => o.itemId === String(item._id)).reduce((sum, o) => sum + o.quantity, 0),
@@ -73,7 +77,8 @@ asoEbiRouter.post('/gifts/aso-ebi/items', async (req, res) => {
     throw new HttpError(409, `You can list up to ${MAX_ITEMS} items`, 'too_many_items')
   }
   const input = itemInput.parse(req.body)
-  wedding.asoEbiItems.push({ ...input, description: input.description || undefined, price: input.price * 100 })
+  if (input.imageId) await assertOwnImage(wedding._id, input.imageId)
+  wedding.asoEbiItems.push({ ...input, description: input.description || undefined, imageId: input.imageId ?? undefined, price: input.price * 100 })
   await wedding.save()
   res.status(201).json({ id: String(wedding.asoEbiItems[wedding.asoEbiItems.length - 1]!._id) })
 })
@@ -88,16 +93,22 @@ asoEbiRouter.put('/gifts/aso-ebi/items/:id', async (req, res) => {
   const wedding = await ownWedding(req.auth!.user.coupleId)
   const item = itemOf(wedding, String(req.params.id))
   const input = itemInput.parse(req.body)
+  if (input.imageId) await assertOwnImage(wedding._id, input.imageId)
+  const oldImage = item.imageId
   // Orders keep the name and price they were placed at, so editing only affects new ones.
-  item.set({ ...input, description: input.description || undefined, price: input.price * 100 })
+  item.set({ ...input, description: input.description || undefined, imageId: input.imageId ?? undefined, price: input.price * 100 })
   await wedding.save()
+  if (oldImage !== input.imageId) await deleteImage(oldImage)
   res.json({ ok: true })
 })
 
 asoEbiRouter.delete('/gifts/aso-ebi/items/:id', async (req, res) => {
   const wedding = await ownWedding(req.auth!.user.coupleId)
-  itemOf(wedding, String(req.params.id)).deleteOne()
+  const item = itemOf(wedding, String(req.params.id))
+  const oldImage = item.imageId
+  item.deleteOne()
   await wedding.save()
+  await deleteImage(oldImage)
   res.status(204).end()
 })
 

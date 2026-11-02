@@ -14,10 +14,12 @@ import { asoEbiRouter } from './routes/asoEbi.js'
 import { giftsRouter } from './routes/gifts.js'
 import { guestsRouter } from './routes/guests.js'
 import { healthRouter } from './routes/health.js'
+import { imagesRouter, publicImagesRouter } from './routes/images.js'
 import { invitesRouter } from './routes/invites.js'
 import { publicRouter } from './routes/public.js'
 import { webhooksRouter } from './routes/webhooks.js'
 import { weddingRouter } from './routes/wedding.js'
+import { wishlistRouter } from './routes/wishlist.js'
 
 export function createApp() {
   const app = express()
@@ -61,8 +63,11 @@ export function createApp() {
   api.use('/invites', invitesRouter)
   api.use('/wedding', weddingRouter)
   api.use('/wedding', guestsRouter)
+  api.use('/wedding', imagesRouter)
   api.use('/wedding', giftsRouter)
   api.use('/wedding', asoEbiRouter)
+  api.use('/wedding', wishlistRouter)
+  api.use('/public', publicImagesRouter)
   api.use('/public', publicRouter)
   app.use('/api', api)
 
