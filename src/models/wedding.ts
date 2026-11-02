@@ -1,6 +1,18 @@
 import { type InferSchemaType, Schema, model } from 'mongoose'
 import { ASO_EBI_UNITS } from '../lib/asoEbi.js'
-import { PALETTES, TEMPLATES } from '../lib/design.js'
+import {
+  BODY_FONTS,
+  CORNERS,
+  FRAMES,
+  HEADING_FONTS,
+  JOINERS,
+  NAME_CASES,
+  NAME_FONTS,
+  NAME_SCALE,
+  PALETTES,
+  TEMPLATES,
+  TEXTURES,
+} from '../lib/design.js'
 
 // Dates are stored as calendar strings (YYYY-MM-DD) and times as HH:mm, both in Nigerian
 // local time. A wedding happens on a day at a place, not at a UTC instant.
@@ -32,6 +44,34 @@ const wishlistItemSchema = new Schema({
   imageId: String,
   price: { type: Number, required: true },
 })
+
+// The couple's own colours, used when the palette is 'custom'. Hex, like #1e1b18.
+const customColorsSchema = new Schema(
+  {
+    background: { type: String, required: true },
+    card: { type: String, required: true },
+    text: { type: String, required: true },
+    accent: { type: String, required: true },
+  },
+  { _id: false },
+)
+
+// Fine-tuning from the Studio. Anything unset follows the template's own default.
+const lookSchema = new Schema(
+  {
+    namesFont: { type: String, enum: NAME_FONTS },
+    headingFont: { type: String, enum: HEADING_FONTS },
+    bodyFont: { type: String, enum: BODY_FONTS },
+    nameScale: { type: Number, min: NAME_SCALE.min, max: NAME_SCALE.max },
+    nameCase: { type: String, enum: NAME_CASES },
+    joiner: { type: String, enum: JOINERS },
+    texture: { type: String, enum: TEXTURES },
+    corners: { type: String, enum: CORNERS },
+    frame: { type: String, enum: FRAMES },
+    colors: { type: customColorsSchema, required: false },
+  },
+  { _id: false },
+)
 
 const weddingSchema = new Schema(
   {
@@ -91,6 +131,7 @@ const weddingSchema = new Schema(
 
     template: { type: String, enum: TEMPLATES, default: 'classic', required: true },
     palette: { type: String, enum: PALETTES, default: 'ivory', required: true },
+    look: { type: lookSchema, default: () => ({}) },
   },
   { timestamps: true },
 )
