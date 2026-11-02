@@ -10,10 +10,12 @@ import { errorHandler, notFoundHandler } from './middleware/errorHandler.js'
 import { enforceOrigin } from './middleware/origin.js'
 import { authRouter } from './routes/auth.js'
 import { coupleRouter } from './routes/couple.js'
+import { giftsRouter } from './routes/gifts.js'
 import { guestsRouter } from './routes/guests.js'
 import { healthRouter } from './routes/health.js'
 import { invitesRouter } from './routes/invites.js'
 import { publicRouter } from './routes/public.js'
+import { webhooksRouter } from './routes/webhooks.js'
 import { weddingRouter } from './routes/wedding.js'
 
 export function createApp() {
@@ -23,6 +25,8 @@ export function createApp() {
   app.use(pinoHttp({ logger }))
   app.use(helmet())
   app.use(cors({ origin: env.CLIENT_ORIGIN, credentials: true }))
+  // Before the JSON parser: webhooks need the raw body to check their signature.
+  app.use('/api/webhooks', webhooksRouter)
   app.use(express.json({ limit: '100kb' }))
   app.use(cookieParser())
 
@@ -35,6 +39,7 @@ export function createApp() {
   api.use('/invites', invitesRouter)
   api.use('/wedding', weddingRouter)
   api.use('/wedding', guestsRouter)
+  api.use('/wedding', giftsRouter)
   api.use('/public', publicRouter)
   app.use('/api', api)
 

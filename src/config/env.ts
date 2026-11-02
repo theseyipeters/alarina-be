@@ -11,6 +11,12 @@ const schema = z.object({
   // Optional: without these, partner invites are not emailed (the link is still returned)
   RESEND_API_KEY: z.string().min(1).optional(),
   MAIL_FROM: z.string().min(1).optional(),
+  // Paystack. Without a secret key, cash gifts are switched off everywhere.
+  PAYSTACK_SECRET_KEY: z.string().min(1).optional(),
+  PAYSTACK_BASE_URL: z.url().default('https://api.paystack.co'),
+  // Set to true only after checking that the fee maths in lib/fees.ts matches this Paystack
+  // account's pricing. Until then couples can't switch gifts on.
+  PAYSTACK_FEES_CONFIRMED: z.stringbool().default(false),
 })
 
 const parsed = schema.safeParse(process.env)

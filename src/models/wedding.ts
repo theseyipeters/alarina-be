@@ -46,6 +46,24 @@ const weddingSchema = new Schema(
       default: [],
     },
 
+    // Where cash gifts are paid. Only the bank, the resolved account name and the last four
+    // digits are kept; the full number lives with Paystack on the couple's subaccount.
+    payout: {
+      type: new Schema(
+        {
+          bankCode: { type: String, required: true },
+          bankName: { type: String, required: true },
+          accountName: { type: String, required: true },
+          accountLast4: { type: String, required: true },
+          subaccountCode: { type: String, required: true },
+          verifiedAt: { type: Date, required: true },
+        },
+        { _id: false },
+      ),
+      required: false,
+    },
+    giftsEnabled: { type: Boolean, default: false, required: true },
+
     template: { type: String, enum: TEMPLATES, default: 'classic', required: true },
     palette: { type: String, enum: PALETTES, default: 'ivory', required: true },
   },

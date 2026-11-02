@@ -1,13 +1,18 @@
+import { randomBytes } from 'node:crypto'
 import { Router } from 'express'
 import type { HydratedDocument } from 'mongoose'
 import { z } from 'zod'
 import { env } from '../config/env.js'
 import { isDuplicateKeyError } from '../db/transaction.js'
 import { HttpError } from '../lib/httpError.js'
+import { grossUp, MAX_GIFT, MIN_GIFT } from '../lib/fees.js'
 import { invitationContent, rsvpStatus, type Wedding as WeddingRecord } from '../lib/invitation.js'
 import { sendMail } from '../lib/mailer.js'
+import { initializeTransaction, paystackConfigured, verifyTransaction } from '../lib/paystack.js'
+import { settle } from '../lib/settle.js'
 import { hashToken, newToken } from '../lib/tokens.js'
-import { publicLookupLimiter, rsvpCreateLimiter } from '../middleware/rateLimit.js'
+import { giftCreateLimiter, publicLookupLimiter, rsvpCreateLimiter } from '../middleware/rateLimit.js'
+import { Contribution } from '../models/contribution.js'
 import { Rsvp, type RsvpDoc } from '../models/rsvp.js'
 import { Wedding } from '../models/wedding.js'
 
@@ -33,8 +38,12 @@ const invitationDto = (w: WeddingRecord) => {
     ...invitationContent(w),
     rsvpOpen: status.open,
     rsvpClosedReason: status.open ? null : status.reason,
+    giftsEnabled: giftsOpen(w),
   }
 }
+
+/** Guests are offered a gift only when the couple switched it on and payouts are ready. */
+const giftsOpen = (w: WeddingRecord) => w.giftsEnabled && Boolean(w.payout?.subaccountCode) && paystackConfigured()
 
 const rsvpDto = (r: HydratedDocument<RsvpDoc>) => ({
   name: r.name,
@@ -157,4 +166,71 @@ publicRouter.patch('/rsvps/:token', publicLookupLimiter, async (req, res) => {
   rsvp.set(Object.fromEntries(Object.entries(input).filter(([, v]) => v !== undefined)))
   await rsvp.save()
   res.json({ rsvp: rsvpDto(rsvp), invitation: invitationDto(wedding), editExpiresAt: rsvp.editExpiresAt })
+})
+
+const giftInput = z.object({
+  // Naira, whole numbers: what the couple should receive. Paystack's fee is added on top.
+  amount: z.number().int().min(MIN_GIFT / 100).max(MAX_GIFT / 100),
+  name: z.string().trim().min(1).max(80),
+  email: z.email().max(254),
+  // The guest's private RSVP link token, to connect the gift to their reply. Optional.
+  rsvpToken: z.string().max(100).optional(),
+})
+
+publicRouter.post('/invitations/:slug/gifts', giftCreateLimiter, async (req, res) => {
+  const wedding = await findPublished(String(req.params.slug))
+  if (!wedding) throw notFound()
+  if (!giftsOpen(wedding)) throw new HttpError(409, 'This couple isn’t accepting cash gifts', 'gifts_closed')
+
+  const input = giftInput.parse(req.body)
+  const rsvp = input.rsvpToken
+    ? await Rsvp.findOne({ editTokenHash: hashToken(input.rsvpToken), weddingId: wedding._id })
+    : null
+
+  const amount = input.amount * 100
+  const { charge, fee } = grossUp(amount)
+  const reference = `alr_${randomBytes(12).toString('hex')}`
+
+  const gift = await Contribution.create({
+    weddingId: wedding._id,
+    ...(rsvp && { rsvpId: rsvp._id }),
+    guestName: input.name,
+    guestEmail: input.email.toLowerCase(),
+    amount,
+    fee,
+    charge,
+    reference,
+  })
+
+  try {
+    const checkout = await initializeTransaction({
+      email: gift.guestEmail,
+      amount: charge,
+      reference,
+      subaccount: wedding.payout!.subaccountCode,
+      callback_url: `${env.CLIENT_ORIGIN}/invite/${wedding.slug}/gift`,
+      metadata: { weddingId: String(wedding._id), guestName: gift.guestName, coupleReceives: amount },
+    })
+    res.status(201).json({ reference, checkoutUrl: checkout.authorization_url, amount, fee, charge })
+  } catch (err) {
+    // The RSVP is untouched; the gift attempt is simply marked failed.
+    gift.status = 'failed'
+    await gift.save()
+    throw err
+  }
+})
+
+// Where the guest lands after Paystack. Confirms the outcome with Paystack directly, then
+// returns enough of the invitation to theme the thank-you page.
+publicRouter.get('/gifts/:reference', publicLookupLimiter, async (req, res) => {
+  const gift = await Contribution.findOne({ reference: String(req.params.reference) })
+  const wedding = gift && (await Wedding.findById(gift.weddingId))
+  if (!gift || !wedding) throw new HttpError(404, 'We couldn’t find that gift', 'gift_not_found')
+
+  if (gift.status === 'pending') await settle(gift, await verifyTransaction(gift.reference))
+
+  res.json({
+    gift: { status: gift.status, amount: gift.amount, guestName: gift.guestName },
+    invitation: wedding.slug ? invitationDto(wedding) : null,
+  })
 })

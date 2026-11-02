@@ -1,5 +1,6 @@
 import mongoose from 'mongoose'
 import { connectDb, disconnectDb } from '../db/connect.js'
+import '../models/contribution.js'
 import '../models/couple.js'
 import '../models/invite.js'
 import '../models/rsvp.js'
