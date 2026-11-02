@@ -27,6 +27,8 @@ type Email = {
   /** Written without a full stop: the layout adds one in the accent colour, like the logo. */
   heading: string
   paragraphs: string[]
+  /** A numbered list of what to do, in order. */
+  steps?: { title: string; text: string }[]
   details?: { label: string; value: string }[]
   action: { label: string; url: string }
   note: string
@@ -40,6 +42,23 @@ const esc = (s: string) =>
 function render(e: Email): RenderedEmail {
   const p = (text: string) =>
     `<p style="margin:0 0 16px;font-family:${BODY_FONT};font-size:16px;line-height:26px;color:${C.text};">${esc(text)}</p>`
+
+  // Each step: an emerald numeral beside a title and one line. Rules between steps, none around them.
+  const steps = e.steps?.length
+    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:8px 0 0;">${e.steps
+        .map(
+          (s, i) => `
+        <tr>
+          <td width="36" valign="top" style="width:36px;padding:16px 0;${i ? `border-top:1px solid ${C.border};` : ''}font-family:${HEADING_FONT};font-size:20px;line-height:24px;color:${C.accent};">${i + 1}</td>
+          <td valign="top" style="padding:16px 0;${i ? `border-top:1px solid ${C.border};` : ''}">
+            <p style="margin:0;font-family:${BODY_FONT};font-size:16px;line-height:24px;color:${C.text};">${esc(s.title)}</p>
+            <p style="margin:2px 0 0;font-family:${BODY_FONT};font-size:14px;line-height:22px;color:${C.muted};">${esc(s.text)}</p>
+          </td>
+        </tr>`,
+        )
+        .join('')}
+      </table>`
+    : ''
 
   const details = e.details?.length
     ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:8px 0 0;background:${C.panel};border-radius:8px;">
@@ -93,6 +112,7 @@ function render(e: Email): RenderedEmail {
         <p style="margin:0 0 12px;font-family:${BODY_FONT};font-size:12px;line-height:16px;letter-spacing:0.08em;text-transform:uppercase;color:${C.muted};">${esc(e.eyebrow)}</p>
         <h1 class="heading" style="margin:0 0 20px;font-family:${HEADING_FONT};font-size:28px;line-height:34px;font-weight:600;letter-spacing:-0.02em;color:${C.text};">${esc(e.heading)}<span style="color:${C.accent};">.</span></h1>
         ${e.paragraphs.map(p).join('\n        ')}
+        ${steps}
         ${details}
         ${button}
         <p style="margin:32px 0 0;padding:24px 0 0;border-top:1px solid ${C.border};font-family:${BODY_FONT};font-size:14px;line-height:22px;color:${C.muted};">${esc(e.note)}</p>
@@ -110,6 +130,7 @@ function render(e: Email): RenderedEmail {
   const text = [
     `${e.heading}.`,
     ...e.paragraphs,
+    ...(e.steps?.length ? [e.steps.map((s, i) => `${i + 1}. ${s.title}\n   ${s.text}`).join('\n\n')] : []),
     ...(e.details?.length ? [e.details.map((d) => `${d.label}: ${d.value}`).join('\n')] : []),
     `${e.action.label}: ${e.action.url}`,
     e.note,
@@ -131,6 +152,30 @@ const clock = (hm: string) => {
   return new Intl.DateTimeFormat('en-NG', { timeZone: 'UTC', hour: 'numeric', minute: '2-digit', hour12: true })
     .format(new Date(Date.UTC(2000, 0, 1, h, m)))
     .toLowerCase()
+}
+
+/** Sent on sign-up: what Alárinà does, and the steps from here to the first RSVP. */
+export function welcomeEmail({ name }: { name: string }) {
+  const firstName = name.trim().split(/\s+/)[0]
+  return render({
+    subject: `Welcome to Alárinà, ${firstName}`,
+    preheader: 'Your wedding space is ready. Here’s how to get from here to your first RSVP.',
+    eyebrow: 'Welcome',
+    heading: `Welcome, ${firstName}`,
+    paragraphs: [
+      'Your wedding space is ready. Here’s how to get from here to your first RSVP. Everything saves as you go, so you can stop and pick up again any time.',
+    ],
+    steps: [
+      { title: 'Invite your partner', text: 'Plan together, each with your own sign-in.' },
+      { title: 'Set up your wedding', text: 'Your names, the date, the venue and any events around the day.' },
+      { title: 'Design your invitation', text: 'Choose a layout and palette. Change them whenever you like.' },
+      { title: 'Publish and share', text: 'Send one link to everyone, or your personal links to see whose guests are whose.' },
+      { title: 'Watch the replies come in', text: 'See who’s coming at a glance. Turn on cash gifts if you’d like them.' },
+    ],
+    action: { label: 'Set up your wedding', url: `${env.CLIENT_ORIGIN}/app` },
+    note: 'Didn’t create an account on Alárinà? Someone may have typed your address by mistake. You can ignore this email.',
+    footer: 'You’re getting this because this address was used to create an account on Alárinà.',
+  })
 }
 
 export function partnerInviteEmail({ inviterName, link, expiresAt }: { inviterName: string; link: string; expiresAt: Date }) {
