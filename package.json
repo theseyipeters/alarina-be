@@ -17,6 +17,7 @@
     "db:up": "bash scripts/mongo-rs.sh start",
     "db:down": "bash scripts/mongo-rs.sh stop",
     "db:sync-indexes": "tsx src/scripts/syncIndexes.ts",
+    "db:move-same-day-events": "tsx src/scripts/moveSameDayEvents.ts",
     "email:preview": "tsx src/scripts/previewEmails.ts",
     "admin:create": "tsx src/scripts/createAdmin.ts"
   },
