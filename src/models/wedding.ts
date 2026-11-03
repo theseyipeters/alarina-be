@@ -94,6 +94,8 @@ const weddingSchema = new Schema(
     partnerTwoName: String,
     partnerOneRole: { type: String, enum: ROLES },
     partnerTwoRole: { type: String, enum: ROLES },
+    // The couple's wedding hashtag, stored without the "#" and in their own capitals: "LoveStays".
+    hashtag: String,
     // The earlier one-line family names. Still shown until the couple adds parents.
     partnerOneFamily: String,
     partnerTwoFamily: String,

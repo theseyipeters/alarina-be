@@ -31,6 +31,18 @@ const blankToNull = (v: unknown) => (typeof v === 'string' && v.trim() === '' ? 
 const text = (max: number) => z.preprocess(blankToNull, z.string().trim().max(max).nullable()).optional()
 const date = () => z.preprocess(blankToNull, calendarDate.nullable()).optional()
 const time = () => z.preprocess(blankToNull, clockTime.nullable()).optional()
+// "#Love Stays" → "LoveStays": the "#" is added back on the invitation, and a tag can't hold spaces.
+const hashtag = () =>
+  z
+    .preprocess(
+      (v) => blankToNull(typeof v === 'string' ? v.replace(/[#\s]/g, '') : v),
+      z
+        .string()
+        .max(40)
+        .regex(/^[\p{L}\p{M}\p{N}_]+$/u, 'Use letters, numbers and underscores only')
+        .nullable(),
+    )
+    .optional()
 const role = () => z.preprocess(blankToNull, z.enum(ROLES).nullable()).optional()
 
 const eventInput = z.object({
@@ -63,6 +75,7 @@ const patchBody = z.strictObject({
   partnerTwoName: text(60),
   partnerOneRole: role(),
   partnerTwoRole: role(),
+  hashtag: hashtag(),
   partnerOneFamily: text(80),
   partnerTwoFamily: text(80),
   partnerOneFather: text(80),

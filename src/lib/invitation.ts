@@ -13,6 +13,7 @@ export const invitationContent = (w: Wedding) => ({
   partnerTwoName: w.partnerTwoName ?? null,
   partnerOneRole: w.partnerOneRole ?? null,
   partnerTwoRole: w.partnerTwoRole ?? null,
+  hashtag: w.hashtag ?? null,
   partnerOneFamily: w.partnerOneFamily ?? null,
   partnerTwoFamily: w.partnerTwoFamily ?? null,
   partnerOneFather: w.partnerOneFather ?? null,
