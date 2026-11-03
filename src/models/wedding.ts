@@ -14,6 +14,15 @@ import {
   TEXTURES,
 } from '../lib/design.js'
 
+/** Who each partner is on the invitation, so captions can read "Parents of the Bride". Optional. */
+export const ROLES = ['bride', 'groom'] as const
+
+/** What kind of ceremony the main venue holds; it names the ceremony on the invitation. */
+export const CEREMONY_TYPES = ['church', 'mosque', 'registry', 'traditional', 'other'] as const
+
+/** Each partner's father and mother, as written on the invitation (title included). */
+export const PARENT_FIELDS = ['partnerOneFather', 'partnerOneMother', 'partnerTwoFather', 'partnerTwoMother'] as const
+
 // Dates are stored as calendar strings (YYYY-MM-DD) and times as HH:mm, both in Nigerian
 // local time. A wedding happens on a day at a place, not at a UTC instant.
 const eventSchema = new Schema(
@@ -86,12 +95,30 @@ const weddingSchema = new Schema(
 
     partnerOneName: String,
     partnerTwoName: String,
+    partnerOneRole: { type: String, enum: ROLES },
+    partnerTwoRole: { type: String, enum: ROLES },
+    // The couple's wedding hashtag, stored without the "#" and in their own capitals: "OlaAndEni2027".
+    hashtag: String,
+    // The earlier one-line family names. Still shown until the couple adds parents.
     partnerOneFamily: String,
     partnerTwoFamily: String,
+    partnerOneFather: String,
+    partnerOneMother: String,
+    partnerTwoFather: String,
+    partnerTwoMother: String,
+    // Which of the parents above have passed away; the invitation writes "Late" before their name.
+    lateParents: { type: [{ type: String, enum: PARENT_FIELDS }], default: [] },
     date: String,
+    // The ceremony: when it starts and where. A reception at the same place needs nothing more.
     startTime: String,
     venueName: String,
     venueAddress: String,
+    ceremonyType: { type: String, enum: CEREMONY_TYPES },
+    // A reception somewhere else, the same day.
+    receptionSeparate: { type: Boolean, default: false, required: true },
+    receptionVenueName: String,
+    receptionVenueAddress: String,
+    receptionTime: String,
     dressNote: String,
     message: String,
     rsvpDeadline: String,

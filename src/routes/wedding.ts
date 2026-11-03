@@ -20,7 +20,7 @@ import { HttpError } from '../lib/httpError.js'
 import { invitationContent } from '../lib/invitation.js'
 import { makeSlug } from '../lib/slug.js'
 import { requireAuth } from '../middleware/auth.js'
-import { Wedding, type WeddingDoc } from '../models/wedding.js'
+import { CEREMONY_TYPES, PARENT_FIELDS, ROLES, Wedding, type WeddingDoc } from '../models/wedding.js'
 
 export const weddingRouter = Router()
 
@@ -31,6 +31,19 @@ const blankToNull = (v: unknown) => (typeof v === 'string' && v.trim() === '' ? 
 const text = (max: number) => z.preprocess(blankToNull, z.string().trim().max(max).nullable()).optional()
 const date = () => z.preprocess(blankToNull, calendarDate.nullable()).optional()
 const time = () => z.preprocess(blankToNull, clockTime.nullable()).optional()
+// "#Ola And Eni" → "OlaAndEni": the "#" is added back on the invitation, and a tag can't hold spaces.
+const hashtag = () =>
+  z
+    .preprocess(
+      (v) => blankToNull(typeof v === 'string' ? v.replace(/[#\s]/g, '') : v),
+      z
+        .string()
+        .max(40)
+        .regex(/^[\p{L}\p{M}\p{N}_]+$/u, 'Use letters, numbers and underscores only')
+        .nullable(),
+    )
+    .optional()
+const role = () => z.preprocess(blankToNull, z.enum(ROLES).nullable()).optional()
 
 const eventInput = z.object({
   id: z.string().min(1).max(40),
@@ -60,12 +73,29 @@ const lookInput = z.strictObject({
 const patchBody = z.strictObject({
   partnerOneName: text(60),
   partnerTwoName: text(60),
+  partnerOneRole: role(),
+  partnerTwoRole: role(),
+  hashtag: hashtag(),
   partnerOneFamily: text(80),
   partnerTwoFamily: text(80),
+  partnerOneFather: text(80),
+  partnerOneMother: text(80),
+  partnerTwoFather: text(80),
+  partnerTwoMother: text(80),
+  lateParents: z
+    .array(z.enum(PARENT_FIELDS))
+    .max(PARENT_FIELDS.length)
+    .transform((list) => [...new Set(list)])
+    .optional(),
   date: date(),
   startTime: time(),
   venueName: text(120),
   venueAddress: text(200),
+  ceremonyType: z.preprocess(blankToNull, z.enum(CEREMONY_TYPES).nullable()).optional(),
+  receptionSeparate: z.boolean().optional(),
+  receptionVenueName: text(120),
+  receptionVenueAddress: text(200),
+  receptionTime: time(),
   dressNote: text(200),
   message: text(1000),
   rsvpDeadline: date(),
@@ -95,6 +125,9 @@ function publishProblems(w: Wedding) {
   const problems: Record<string, string> = {}
   for (const key of REQUIRED_TO_PUBLISH) if (!w[key]) problems[key] = 'Required to publish'
   if (w.date && w.date < todayInLagos()) problems.date = 'The wedding date has already passed'
+  if (w.receptionSeparate && !w.receptionVenueName) {
+    problems.receptionVenueName = 'Add the reception venue, or say it’s at the ceremony venue'
+  }
   if (w.rsvpDeadline && w.date && w.rsvpDeadline > w.date) {
     problems.rsvpDeadline = 'The RSVP deadline must be on or before the wedding date'
   }

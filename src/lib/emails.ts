@@ -242,13 +242,19 @@ export function partnerInviteEmail({ inviterName, link, expiresAt }: { inviterNa
 type WeddingInfo = {
   partnerOneName?: string | null
   partnerTwoName?: string | null
+  partnerOneRole?: string | null
+  partnerTwoRole?: string | null
   date?: string | null
   startTime?: string | null
   venueName?: string | null
   venueAddress?: string | null
 }
 
-const coupleNames =(w: WeddingInfo) => [w.partnerOneName, w.partnerTwoName].filter(Boolean).join(' & ')
+// The bride first once the couple has said who she is, as on the invitation; otherwise as typed.
+const brideIsSecond = (w: WeddingInfo) =>
+  (w.partnerTwoRole === 'bride' && w.partnerOneRole !== 'bride') || (w.partnerOneRole === 'groom' && w.partnerTwoRole !== 'groom')
+const coupleNames = (w: WeddingInfo) =>
+  (brideIsSecond(w) ? [w.partnerTwoName, w.partnerOneName] : [w.partnerOneName, w.partnerTwoName]).filter(Boolean).join(' & ')
 
 /**
  * The guest's private link to view or change their RSVP. Sent after a new reply, or again

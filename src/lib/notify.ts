@@ -30,7 +30,7 @@ export const notifyRsvp = (wedding: WeddingRef, rsvp: { name: string; attending:
     'an RSVP',
     (async () => {
       const [info, comingSoFar] = await Promise.all([
-        Wedding.findById(wedding._id).select('partnerOneName partnerTwoName'),
+        Wedding.findById(wedding._id).select('partnerOneName partnerTwoName partnerOneRole partnerTwoRole'),
         Rsvp.countDocuments({ weddingId: wedding._id, attending: true }),
       ])
       if (!info) return
@@ -52,7 +52,7 @@ export const notifyGift = (gift: { _id: unknown }) =>
         { returnDocument: 'after' },
       )
       if (!claimed) return
-      const wedding = await Wedding.findById(claimed.weddingId).select('coupleId partnerOneName partnerTwoName')
+      const wedding = await Wedding.findById(claimed.weddingId).select('coupleId partnerOneName partnerTwoName partnerOneRole partnerTwoRole')
       if (!wedding) return
       const paid: ContributionDoc = claimed
       await emailCouple(wedding.coupleId, (name) =>
