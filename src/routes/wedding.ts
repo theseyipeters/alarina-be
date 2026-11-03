@@ -20,7 +20,7 @@ import { HttpError } from '../lib/httpError.js'
 import { invitationContent } from '../lib/invitation.js'
 import { makeSlug } from '../lib/slug.js'
 import { requireAuth } from '../middleware/auth.js'
-import { Wedding, type WeddingDoc } from '../models/wedding.js'
+import { PARENT_FIELDS, ROLES, Wedding, type WeddingDoc } from '../models/wedding.js'
 
 export const weddingRouter = Router()
 
@@ -31,6 +31,7 @@ const blankToNull = (v: unknown) => (typeof v === 'string' && v.trim() === '' ? 
 const text = (max: number) => z.preprocess(blankToNull, z.string().trim().max(max).nullable()).optional()
 const date = () => z.preprocess(blankToNull, calendarDate.nullable()).optional()
 const time = () => z.preprocess(blankToNull, clockTime.nullable()).optional()
+const role = () => z.preprocess(blankToNull, z.enum(ROLES).nullable()).optional()
 
 const eventInput = z.object({
   id: z.string().min(1).max(40),
@@ -60,8 +61,19 @@ const lookInput = z.strictObject({
 const patchBody = z.strictObject({
   partnerOneName: text(60),
   partnerTwoName: text(60),
+  partnerOneRole: role(),
+  partnerTwoRole: role(),
   partnerOneFamily: text(80),
   partnerTwoFamily: text(80),
+  partnerOneFather: text(80),
+  partnerOneMother: text(80),
+  partnerTwoFather: text(80),
+  partnerTwoMother: text(80),
+  lateParents: z
+    .array(z.enum(PARENT_FIELDS))
+    .max(PARENT_FIELDS.length)
+    .transform((list) => [...new Set(list)])
+    .optional(),
   date: date(),
   startTime: time(),
   venueName: text(120),

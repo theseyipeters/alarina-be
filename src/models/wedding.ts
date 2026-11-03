@@ -14,6 +14,12 @@ import {
   TEXTURES,
 } from '../lib/design.js'
 
+/** Who each partner is on the invitation, so captions can read "Parents of the Bride". Optional. */
+export const ROLES = ['bride', 'groom'] as const
+
+/** Each partner's father and mother, as written on the invitation (title included). */
+export const PARENT_FIELDS = ['partnerOneFather', 'partnerOneMother', 'partnerTwoFather', 'partnerTwoMother'] as const
+
 // Dates are stored as calendar strings (YYYY-MM-DD) and times as HH:mm, both in Nigerian
 // local time. A wedding happens on a day at a place, not at a UTC instant.
 const eventSchema = new Schema(
@@ -86,8 +92,17 @@ const weddingSchema = new Schema(
 
     partnerOneName: String,
     partnerTwoName: String,
+    partnerOneRole: { type: String, enum: ROLES },
+    partnerTwoRole: { type: String, enum: ROLES },
+    // The earlier one-line family names. Still shown until the couple adds parents.
     partnerOneFamily: String,
     partnerTwoFamily: String,
+    partnerOneFather: String,
+    partnerOneMother: String,
+    partnerTwoFather: String,
+    partnerTwoMother: String,
+    // Which of the parents above have passed away; the invitation writes "Late" before their name.
+    lateParents: { type: [{ type: String, enum: PARENT_FIELDS }], default: [] },
     date: String,
     startTime: String,
     venueName: String,
