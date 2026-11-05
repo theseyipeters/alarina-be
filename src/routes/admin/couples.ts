@@ -11,7 +11,7 @@ import { Contribution, linesOf } from '../../models/contribution.js'
 import { Couple } from '../../models/couple.js'
 import { GiftUnlock } from '../../models/giftUnlock.js'
 import { Invite } from '../../models/invite.js'
-import { Rsvp } from '../../models/rsvp.js'
+import { attendingExpr, replyKind, Rsvp } from '../../models/rsvp.js'
 import { Session } from '../../models/session.js'
 import { User } from '../../models/user.js'
 import { Wedding } from '../../models/wedding.js'
@@ -117,7 +117,7 @@ async function statsFor(weddingIds: Types.ObjectId[]) {
   const [rsvps, gifts] = await Promise.all([
     Rsvp.aggregate<{ _id: Types.ObjectId; attending: number; total: number }>([
       { $match: { weddingId: { $in: weddingIds } } },
-      { $group: { _id: '$weddingId', attending: { $sum: { $cond: ['$attending', 1, 0] } }, total: { $sum: 1 } } },
+      { $group: { _id: '$weddingId', attending: { $sum: attendingExpr }, total: { $sum: 1 } } },
     ]),
     Contribution.aggregate<{ _id: Types.ObjectId; amount: number; count: number }>([
       { $match: { weddingId: { $in: weddingIds }, status: 'success' } },
@@ -293,8 +293,9 @@ adminCouplesRouter.get('/couples/:id', async (req, res) => {
       : null,
     stats: {
       replies: {
-        attending: rsvps.filter((r) => r.attending).length,
-        declined: rsvps.filter((r) => !r.attending).length,
+        attending: rsvps.filter((r) => replyKind(r) === 'attending').length,
+        declined: rsvps.filter((r) => replyKind(r) === 'declined').length,
+        rejected: rsvps.filter((r) => replyKind(r) === 'rejected').length,
       },
       gifts: byKind,
     },
@@ -303,7 +304,7 @@ adminCouplesRouter.get('/couples/:id', async (req, res) => {
       name: r.name,
       email: r.email,
       phone: r.phone,
-      attending: r.attending,
+      reply: replyKind(r),
       side: r.sideUserId ? (sideName.get(String(r.sideUserId)) ?? null) : null,
       createdAt: r.createdAt,
     })),

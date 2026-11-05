@@ -30,7 +30,7 @@ type Email = {
   /** A numbered list of what to do, in order. */
   steps?: { title: string; text: string }[]
   details?: { label: string; value: string }[]
-  action: { label: string; url: string }
+  action?: { label: string; url: string }
   note: string
   footer: string
 }
@@ -73,7 +73,8 @@ function render(e: Email): RenderedEmail {
     : ''
 
   // A "bulletproof" button: the link fills a coloured cell, so it works where CSS padding on links doesn't.
-  const button = `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:32px 0 0;">
+  const button = e.action
+    ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:32px 0 0;">
       <tr><td bgcolor="${C.text}" style="background:${C.text};border-radius:8px;">
         <a href="${esc(e.action.url)}" style="display:inline-block;padding:14px 28px;font-family:${BODY_FONT};font-size:16px;line-height:20px;color:${C.bg};text-decoration:none;border-radius:8px;">${esc(e.action.label)}</a>
       </td></tr>
@@ -81,6 +82,7 @@ function render(e: Email): RenderedEmail {
     <p style="margin:16px 0 0;font-family:${BODY_FONT};font-size:13px;line-height:20px;color:${C.muted};">
       Or open this link: <a href="${esc(e.action.url)}" style="color:${C.accent};word-break:break-all;">${esc(e.action.url)}</a>
     </p>`
+    : ''
 
   const html = `<!doctype html>
 <html lang="en">
@@ -132,7 +134,7 @@ function render(e: Email): RenderedEmail {
     ...e.paragraphs,
     ...(e.steps?.length ? [e.steps.map((s, i) => `${i + 1}. ${s.title}\n   ${s.text}`).join('\n\n')] : []),
     ...(e.details?.length ? [e.details.map((d) => `${d.label}: ${d.value}`).join('\n')] : []),
-    `${e.action.label}: ${e.action.url}`,
+    ...(e.action ? [`${e.action.label}: ${e.action.url}`] : []),
     e.note,
     `--\n${e.footer}\nAlárinà. Wedding invitations and RSVPs`,
   ].join('\n\n')
@@ -302,11 +304,11 @@ export function rsvpLinkEmail({
 
   return render({
     subject: `Thanks for your reply to ${names}`,
-    preheader: attending ? 'You’re on the list. Keep this email to change your reply later.' : 'Your reply is saved. Keep this email to change it later.',
+    preheader: attending ? 'We’ve received your reply. Keep this email to change it later.' : 'Your reply is saved. Keep this email to change it later.',
     eyebrow: 'Your RSVP',
     heading: `Thanks for replying, ${firstName}`,
     paragraphs: [
-      attending ? `Your reply is saved: you’re coming to ${names}’s wedding.` : `Your reply is saved: you can’t make it to ${names}’s wedding.`,
+      attending ? `We’ve received your reply: you’ve accepted ${names}’s invitation.` : `Your reply is saved: you can’t make it to ${names}’s wedding.`,
       'If your plans change, you can view or change your reply with your private link below.',
     ],
     // The details are only useful to guests who are coming.
@@ -319,6 +321,43 @@ export function rsvpLinkEmail({
     action,
     note: keepPrivate,
     footer,
+  })
+}
+
+/** Tells a guest the couple can't confirm their place, with the couple's note if they added one. */
+export function rsvpRejectedEmail({ wedding, guestName, note }: { wedding: WeddingInfo; guestName: string; note?: string }) {
+  const names = coupleNames(wedding) || 'the couple'
+  const firstName = guestName.trim().split(/\s+/)[0]
+  return render({
+    subject: `An update on your RSVP for ${names}’s wedding`,
+    preheader: `An update from ${names}.`,
+    eyebrow: 'Your RSVP',
+    heading: 'An update on your RSVP',
+    paragraphs: [
+      `Hi ${firstName}, thank you for replying to ${names}’s invitation. Unfortunately they are unable to confirm a place for you at their wedding.`,
+    ],
+    details: note ? [{ label: 'A note from the couple', value: note }] : undefined,
+    note: 'If you have any questions, please contact the couple directly.',
+    footer: `Sent by Alárinà for ${names}’s wedding, because this address was used to reply to their invitation.`,
+  })
+}
+
+/** Tells a guest the couple have undone a rejection. Only the link's hash is stored, so it can't be included. */
+export function rsvpRestoredEmail({ wedding, guestName, link }: { wedding: WeddingInfo; guestName: string; link: string }) {
+  const names = coupleNames(wedding) || 'the couple'
+  const firstName = guestName.trim().split(/\s+/)[0]
+  const when = [wedding.date && calendarDay(wedding.date), wedding.startTime && clock(wedding.startTime)].filter(Boolean).join(' · ')
+  const where = [wedding.venueName, wedding.venueAddress].filter(Boolean).join(', ')
+  return render({
+    subject: `Your place at ${names}’s wedding is confirmed`,
+    preheader: `Good news from ${names}.`,
+    eyebrow: 'Your RSVP',
+    heading: `Your place is confirmed, ${firstName}`,
+    paragraphs: [`Good news: ${names} have confirmed your place at their wedding. Please disregard their earlier update.`],
+    details: [...(when ? [{ label: 'When', value: when }] : []), ...(where ? [{ label: 'Where', value: where }] : [])],
+    action: { label: 'View the invitation', url: link },
+    note: 'If your plans change, you can change your reply with the private link we emailed you.',
+    footer: `Sent by Alárinà for ${names}’s wedding, because this address was used to reply to their invitation.`,
   })
 }
 
