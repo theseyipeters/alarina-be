@@ -10,7 +10,7 @@ export const GIFTS_UNLOCK_PRICE = 5_000_00
 
 /** Marks the wedding unlocked once its payment has succeeded. Safe to call again. */
 export async function applyUnlock(unlock: HydratedDocument<GiftUnlockDoc>) {
-  if (unlock.status !== 'success') return
+  if (unlock.status !== 'success' || unlock.revokedAt) return
   await Wedding.updateOne(
     { _id: unlock.weddingId, giftsUnlockedAt: { $exists: false } },
     { $set: { giftsUnlockedAt: unlock.paidAt ?? new Date() } },

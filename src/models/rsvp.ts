@@ -17,6 +17,10 @@ const rsvpSchema = new Schema(
     editTokenHash: { type: String, required: true, unique: true },
     editExpiresAt: { type: Date, required: true },
     editRevokedAt: Date,
+    // The extra link from the guest's latest resend. Their first link keeps working alongside it.
+    resendTokenHash: { type: String, index: { unique: true, partialFilterExpression: { resendTokenHash: { $type: 'string' } } } },
+    // When a link was last emailed because someone replied again with this address.
+    linkResentAt: Date,
   },
   { timestamps: true },
 )

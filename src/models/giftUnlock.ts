@@ -11,6 +11,8 @@ const giftUnlockSchema = new Schema(
     status: { type: String, enum: ['pending', 'success', 'failed', 'abandoned'], default: 'pending', required: true },
     paidAt: Date,
     grantedBy: { type: Schema.Types.ObjectId, ref: 'AdminUser' },
+    // When staff locked Gifts. This payment can't unlock them again; a new one can.
+    revokedAt: Date,
     note: String,
   },
   { timestamps: true },

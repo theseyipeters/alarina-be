@@ -91,6 +91,15 @@ const rsvpDto = (r: HydratedDocument<RsvpDoc>) => ({
 
 const editLink = (token: string) => `${env.CLIENT_ORIGIN}/rsvp/${token}`
 
+/** Anyone who knows a guest's address can trigger a resend, so each address gets at most one this often. */
+const LINK_RESEND_COOLDOWN = 15 * 60 * 1000
+
+/** Finds a reply by either of its private links. */
+const byEditToken = (token: string) => {
+  const hash = hashToken(token)
+  return { $or: [{ editTokenHash: hash }, { resendTokenHash: hash }] }
+}
+
 /** Edit links work until the end of the wedding day (Lagos time), or 180 days if no date is set. */
 const editExpiry = (w: WeddingRecord) =>
   w.date ? new Date(`${w.date}T23:59:59+01:00`) : new Date(Date.now() + 180 * DAY)
@@ -162,24 +171,35 @@ publicRouter.post('/invitations/:slug/rsvps', rsvpCreateLimiter, async (req, res
   } catch (err) {
     if (!isDuplicateKeyError(err)) throw err
 
-    // Already replied. If email works, send a fresh private link to that address (never to the
-    // requester's screen), and only then retire the old one so the guest is never left without a link.
+    // Already replied. Email an extra private link to that address (never to the requester's
+    // screen); the first one keeps working, so a stranger typing a guest's address can't break it.
+    // A link the couple revoked stays revoked, and a rejected guest has nothing left to change.
     const existing = await Rsvp.findOne({ weddingId: wedding._id, email }).orFail()
+    const alreadyResponded = (emailSent: boolean) =>
+      new HttpError(409, 'You’ve already replied with this email', 'already_responded', { emailSent })
+    if (existing.editRevokedAt || existing.rejectedAt) throw alreadyResponded(false)
+
+    // Claimed atomically, so a burst of requests sends one email.
+    const claimed = await Rsvp.findOneAndUpdate(
+      { _id: existing._id, $or: [{ linkResentAt: null }, { linkResentAt: { $lt: new Date(Date.now() - LINK_RESEND_COOLDOWN) } }] },
+      { $set: { linkResentAt: new Date() } },
+    )
+    if (!claimed) throw alreadyResponded(true)
+
     const expiresAt = editExpiry(wedding)
     const emailSent = await sendEditLink(wedding, existing, editLink(token), expiresAt, true)
     if (emailSent) {
-      existing.editTokenHash = tokenHash
-      existing.editExpiresAt = expiresAt
-      existing.editRevokedAt = undefined
-      await existing.save()
+      await Rsvp.updateOne({ _id: existing._id }, { $set: { resendTokenHash: tokenHash, editExpiresAt: expiresAt } })
+    } else {
+      await Rsvp.updateOne({ _id: existing._id }, { $unset: { linkResentAt: 1 } })
     }
-    throw new HttpError(409, 'You’ve already replied with this email', 'already_responded', { emailSent })
+    throw alreadyResponded(emailSent)
   }
 })
 
 async function findByEditToken(token: string) {
   const rsvp = await Rsvp.findOne({
-    editTokenHash: hashToken(token),
+    ...byEditToken(token),
     editRevokedAt: null,
     editExpiresAt: { $gt: new Date() },
   })
@@ -293,7 +313,7 @@ publicRouter.post('/invitations/:slug/checkout', giftCreateLimiter, async (req, 
   if (amount > MAX_GIFT) throw new HttpError(400, 'That basket is too large. Remove something and try again.', 'basket_too_large')
 
   const rsvp = input.rsvpToken
-    ? await Rsvp.findOne({ editTokenHash: hashToken(input.rsvpToken), weddingId: wedding._id })
+    ? await Rsvp.findOne({ ...byEditToken(input.rsvpToken), weddingId: wedding._id })
     : null
   const { charge, fee } = grossUp(amount)
   const reference = `alr_${randomBytes(12).toString('hex')}`
@@ -351,6 +371,7 @@ publicRouter.get('/gifts/:reference', publicLookupLimiter, async (req, res) => {
         quantity: l.quantity ?? null,
       })),
     },
-    invitation: wedding.slug ? await invitationDto(wedding) : null,
+    // The receipt outlives the invitation: nothing about the wedding once it's hidden from guests.
+    invitation: wedding.status === 'published' && !(await isSuspended(wedding.coupleId)) ? await invitationDto(wedding) : null,
   })
 })
