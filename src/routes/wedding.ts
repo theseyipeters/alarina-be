@@ -17,29 +17,36 @@ import {
   TEXTURES,
 } from '../lib/design.js'
 import { HttpError } from '../lib/httpError.js'
-import { invitationContent } from '../lib/invitation.js'
+import { eventNames, invitationContent } from '../lib/invitation.js'
 import { makeSlug } from '../lib/slug.js'
 import { requireAuth } from '../middleware/auth.js'
-import { CEREMONY_TYPES, PARENT_FIELDS, ROLES, Wedding, type WeddingDoc } from '../models/wedding.js'
+import { PARENT_FIELDS, ROLES, Wedding, type WeddingDoc } from '../models/wedding.js'
 
 export const weddingRouter = Router()
 
 weddingRouter.use(requireAuth)
 
 // Blank strings clear a field, so a couple can delete an answer by emptying the input.
+const EVENT_NAME_MAX = 80
+const PHONE_MAX = 20
+const PHONE_MIN_DIGITS = 7
+
 const blankToNull = (v: unknown) => (typeof v === 'string' && v.trim() === '' ? null : v)
 const text = (max: number) => z.preprocess(blankToNull, z.string().trim().max(max).nullable()).optional()
 const date = () => z.preprocess(blankToNull, calendarDate.nullable()).optional()
+// Autosave sends a number while it's being typed, so a full number is only required to publish.
+const phoneNumber = () => z.preprocess(blankToNull, z.string().trim().max(PHONE_MAX).regex(/^[0-9+()\s-]*$/).nullable()).optional()
 const time = () => z.preprocess(blankToNull, clockTime.nullable()).optional()
 // "#Ola And Eni" → "OlaAndEni": the "#" is added back on the invitation, and a tag can't hold spaces.
+// Underscores go too (older tags may have them), and apostrophes are always stored curly, never first.
 const hashtag = () =>
   z
     .preprocess(
-      (v) => blankToNull(typeof v === 'string' ? v.replace(/[#\s]/g, '') : v),
+      (v) => blankToNull(typeof v === 'string' ? v.replace(/[#\s_]/g, '').replace(/'/g, '’').replace(/^’+/, '') : v),
       z
         .string()
         .max(40)
-        .regex(/^[\p{L}\p{M}\p{N}_]+$/u, 'Use letters, numbers and underscores only')
+        .regex(/^[\p{L}\p{M}\p{N}’]+$/u, 'Use letters, numbers and apostrophes only')
         .nullable(),
     )
     .optional()
@@ -91,14 +98,18 @@ const patchBody = z.strictObject({
   startTime: time(),
   venueName: text(120),
   venueAddress: text(200),
-  ceremonyType: z.preprocess(blankToNull, z.enum(CEREMONY_TYPES).nullable()).optional(),
+  ceremonyName: text(EVENT_NAME_MAX),
   receptionSeparate: z.boolean().optional(),
+  receptionName: text(EVENT_NAME_MAX),
   receptionVenueName: text(120),
   receptionVenueAddress: text(200),
   receptionTime: time(),
   dressNote: text(200),
   message: text(1000),
   rsvpDeadline: date(),
+  contactPhoneOne: phoneNumber(),
+  contactPhoneTwo: phoneNumber(),
+  strictlyByInvitation: z.boolean().optional(),
   events: z.array(eventInput).max(10).optional(),
   template: z.enum(TEMPLATES).optional(),
   palette: z.enum(PALETTES).optional(),
@@ -128,8 +139,18 @@ function publishProblems(w: Wedding) {
   if (w.receptionSeparate && !w.receptionVenueName) {
     problems.receptionVenueName = 'Add the reception venue, or say it’s at the ceremony venue'
   }
+  // One venue can go without a name; two need telling apart.
+  if (w.receptionSeparate && w.receptionVenueName) {
+    const names = eventNames(w)
+    if (!names.ceremonyName) problems.ceremonyName = 'Add a name for your ceremony'
+    if (!names.receptionName) problems.receptionName = 'Add a name for your reception'
+  }
   if (w.rsvpDeadline && w.date && w.rsvpDeadline > w.date) {
     problems.rsvpDeadline = 'The RSVP deadline must be on or before the wedding date'
+  }
+  for (const key of ['contactPhoneOne', 'contactPhoneTwo'] as const) {
+    const phone = w[key]
+    if (phone && phone.replace(/\D/g, '').length < PHONE_MIN_DIGITS) problems[key] = 'Enter a full phone number, or remove it'
   }
   return problems
 }
@@ -170,6 +191,8 @@ weddingRouter.patch('/', async (req, res) => {
     if (value === null) $unset[key] = ''
     else $set[key] = value
   }
+  // Once the couple has answered, the old ceremony type no longer speaks for them.
+  if (fields.ceremonyName !== undefined) $unset.ceremonyType = ''
   if (events) {
     $set.events = events.map((e) => Object.fromEntries(Object.entries(e).filter(([, v]) => v != null)))
   }

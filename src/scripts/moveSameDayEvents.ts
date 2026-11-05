@@ -31,15 +31,16 @@ for await (const w of Wedding.find({ ...filter, date: { $exists: true }, 'events
   }
 
   const { event, role } = matched[0]!
-  if (role.as === 'ceremony') {
+  if (role === 'ceremony') {
     // The event is the ceremony; the venue the couple had as the main one becomes the reception.
-    console.log(`${apply ? 'move' : 'would move'} ${id}: "${event.name}" → ${role.type} ceremony; main venue → reception`)
+    console.log(`${apply ? 'move' : 'would move'} ${id}: "${event.name}" → ceremony; main venue → reception`)
     w.set({
       receptionSeparate: true,
       receptionVenueName: w.venueName,
       receptionVenueAddress: w.venueAddress,
       receptionTime: w.startTime,
-      ceremonyType: role.type,
+      receptionName: w.ceremonyName,
+      ceremonyName: event.name,
       venueName: event.venueName,
       venueAddress: event.venueAddress,
       startTime: event.startTime ?? w.startTime,
@@ -51,6 +52,7 @@ for await (const w of Wedding.find({ ...filter, date: { $exists: true }, 'events
       receptionVenueName: event.venueName,
       receptionVenueAddress: event.venueAddress,
       receptionTime: event.startTime,
+      receptionName: event.name,
     })
   }
   w.events.pull({ id: event.id })

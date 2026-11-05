@@ -4,6 +4,29 @@ import { todayInLagos } from './dates.js'
 
 export type Wedding = HydratedDocument<WeddingDoc>
 
+/** What the invitation said before couples named their own events. */
+const OLD_CEREMONY_NAMES = {
+  church: 'Church service',
+  mosque: 'Nikkah',
+  registry: 'Registry',
+  traditional: 'Traditional ceremony',
+  other: 'Ceremony',
+}
+
+/**
+ * The names the couple gave their events. Invitations from before they could keep the wording they
+ * had until the couple changes it, and a live card with two venues always tells them apart.
+ */
+export function eventNames(w: Wedding) {
+  const twoVenues = Boolean(w.receptionSeparate && w.receptionVenueName)
+  const live = Boolean(w.publishedAt)
+  const old = w.ceremonyType ? OLD_CEREMONY_NAMES[w.ceremonyType] : live && twoVenues ? 'Ceremony' : null
+  return {
+    ceremonyName: w.ceremonyName ?? (old && !twoVenues ? `${old} & reception` : old),
+    receptionName: w.receptionName ?? (live && twoVenues ? 'Reception' : null),
+  }
+}
+
 /** The answers that make up the invitation itself. Also what guests see on the public page. */
 export const invitationContent = (w: Wedding) => ({
   template: w.template,
@@ -25,7 +48,7 @@ export const invitationContent = (w: Wedding) => ({
   startTime: w.startTime ?? null,
   venueName: w.venueName ?? null,
   venueAddress: w.venueAddress ?? null,
-  ceremonyType: w.ceremonyType ?? null,
+  ...eventNames(w),
   receptionSeparate: w.receptionSeparate,
   receptionVenueName: w.receptionVenueName ?? null,
   receptionVenueAddress: w.receptionVenueAddress ?? null,
@@ -33,6 +56,9 @@ export const invitationContent = (w: Wedding) => ({
   dressNote: w.dressNote ?? null,
   message: w.message ?? null,
   rsvpDeadline: w.rsvpDeadline ?? null,
+  contactPhoneOne: w.contactPhoneOne ?? null,
+  contactPhoneTwo: w.contactPhoneTwo ?? null,
+  strictlyByInvitation: w.strictlyByInvitation,
   events: w.events.map((e) => ({
     id: e.id,
     name: e.name,
