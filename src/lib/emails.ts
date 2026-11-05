@@ -241,7 +241,7 @@ export function partnerInviteEmail({ inviterName, link, expiresAt }: { inviterNa
   })
 }
 
-type WeddingInfo = {
+export type WeddingInfo = {
   partnerOneName?: string | null
   partnerTwoName?: string | null
   partnerOneRole?: string | null
@@ -260,7 +260,7 @@ const coupleNames = (w: WeddingInfo) =>
 
 /**
  * The guest's private link to view or change their RSVP. Sent after a new reply, or again
- * (with a fresh link) when someone tries to reply a second time with the same address.
+ * (with an extra link) when someone replies again with the same address or asks for their link.
  */
 export function rsvpLinkEmail({
   wedding,
@@ -290,11 +290,11 @@ export function rsvpLinkEmail({
       eyebrow: 'Your RSVP',
       heading: `Here’s a new link, ${firstName}`,
       paragraphs: [
-        `Someone tried to reply to ${names}’s invitation with this email address. You’ve already replied, so we’ve sent you a fresh private link instead.`,
+        `This email address was entered on ${names}’s invitation. You’ve already replied, so we’ve sent you a fresh private link.`,
         'If that wasn’t you, nothing has changed. Your reply stays as it was.',
       ],
       action,
-      note: `Your earlier link no longer works. ${keepPrivate}`,
+      note: `Your earlier link still works too. ${keepPrivate}`,
       footer,
     })
   }
@@ -454,6 +454,43 @@ export function giftReceivedEmail({
     details: [...lines.map(giftLineDetail), ...(lines.length > 1 ? [{ label: 'Total', value: naira(amount) }] : [])],
     action: { label: 'See your gifts', url: `${env.CLIENT_ORIGIN}/app/gifts${tab}` },
     note: 'Amounts are what you receive. Guests pay Paystack’s fee on top.',
+    footer: coupleFooter(wedding),
+  })
+}
+
+/** Tells a partner where gifts are now paid, so they'd notice if it wasn't one of them. */
+export function payoutChangedEmail({
+  name,
+  wedding,
+  changedBy,
+  bankName,
+  accountName,
+  accountLast4,
+  isFirst,
+}: {
+  name: string
+  wedding: WeddingInfo
+  changedBy: string
+  bankName: string
+  accountName: string
+  accountLast4: string
+  isFirst: boolean
+}) {
+  const firstName = name.trim().split(/\s+/)[0]
+  const done = isFirst ? 'added' : 'changed'
+  return render({
+    subject: `Your gifts payout account was ${done}`,
+    preheader: `Gifts now go to the account ending ${accountLast4}.`,
+    eyebrow: 'Payout account',
+    heading: `Your payout account was ${done}`,
+    paragraphs: [`Hi ${firstName}, ${changedBy} ${done} the bank account your wedding gifts are paid into. New gifts go to this account from now on.`],
+    details: [
+      { label: 'Account name', value: accountName },
+      { label: 'Bank', value: bankName },
+      { label: 'Account ending', value: accountLast4 },
+    ],
+    action: { label: 'Check your account', url: `${env.CLIENT_ORIGIN}/app/gifts` },
+    note: 'Wasn’t one of you? Reset your password straight away, then change the account back.',
     footer: coupleFooter(wedding),
   })
 }

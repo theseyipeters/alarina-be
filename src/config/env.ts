@@ -4,6 +4,10 @@ import { z } from 'zod'
 const schema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().positive().default(5001),
+  // The header that holds the visitor's IP address: cf-connecting-ip on Render. Rate limits go by
+  // that address, so behind a proxy this must be set, or every visitor shares one limit. Only name
+  // a header the host overwrites on every request; otherwise visitors can fake it.
+  CLIENT_IP_HEADER: z.string().min(1).optional(),
   MONGODB_URI: z.string().min(1),
   CLIENT_ORIGIN: z.url(),
   // Origin of the staff admin app (admin/). Without it the admin API is switched off.

@@ -4,6 +4,7 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import {
   giftReceivedEmail,
   partnerInviteEmail,
+  payoutChangedEmail,
   passwordChangedEmail,
   passwordResetEmail,
   rsvpLinkEmail,
@@ -39,6 +40,7 @@ const emails: Record<string, RenderedEmail> = {
   'rsvp-restored': rsvpRestoredEmail({ wedding, guestName: 'Chidi Okeke', link: 'http://localhost:5173/invite/sample' }),
   'couple-rsvp-attending': rsvpReceivedEmail({ name: 'Adaeze Okafor', wedding, guestName: 'Chidi Okeke', attending: true, comingSoFar: 42 }),
   'couple-rsvp-declined': rsvpReceivedEmail({ name: 'Adaeze Okafor', wedding, guestName: 'Chidi Okeke', attending: false, comingSoFar: 1 }),
+  'couple-payout-changed': payoutChangedEmail({ name: 'Adaeze Okafor', wedding, changedBy: 'Tolu Adeyemi', bankName: 'Sample Bank', accountName: 'TOLU ADEYEMI', accountLast4: '6789', isFirst: false }),
   'couple-gift-cash': giftReceivedEmail({ name: 'Adaeze Okafor', wedding, guestName: 'Chidi Okeke', lines: [{ kind: 'cash', amount: 2500000 }], amount: 2500000 }),
   'couple-gift-basket': giftReceivedEmail({
     name: 'Tolu Adeyemi',

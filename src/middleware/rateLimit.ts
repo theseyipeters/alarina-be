@@ -1,5 +1,8 @@
+import type { Request } from 'express'
 import { ipKeyGenerator, rateLimit } from 'express-rate-limit'
 import { env } from '../config/env.js'
+
+const clientIp = (req: Request) => (env.CLIENT_IP_HEADER && req.get(env.CLIENT_IP_HEADER)) || req.ip || ''
 
 const limiter = (windowMs: number, limit: number, message: string, perUser = false) =>
   rateLimit({
@@ -8,7 +11,7 @@ const limiter = (windowMs: number, limit: number, message: string, perUser = fal
     standardHeaders: 'draft-8',
     legacyHeaders: false,
     skip: () => env.NODE_ENV === 'test',
-    keyGenerator: (req) => (perUser && req.auth ? String(req.auth.user._id) : ipKeyGenerator(req.ip ?? '')),
+    keyGenerator: (req) => (perUser && req.auth ? String(req.auth.user._id) : ipKeyGenerator(clientIp(req))),
     handler: (_req, res) => {
       res.status(429).json({ error: { code: 'rate_limited', message } })
     },

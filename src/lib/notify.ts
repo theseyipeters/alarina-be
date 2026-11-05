@@ -5,10 +5,10 @@ import { Couple } from '../models/couple.js'
 import { Rsvp } from '../models/rsvp.js'
 import { User } from '../models/user.js'
 import { Wedding } from '../models/wedding.js'
-import { giftReceivedEmail, rsvpReceivedEmail, type RenderedEmail } from './emails.js'
+import { giftReceivedEmail, payoutChangedEmail, rsvpReceivedEmail, type RenderedEmail, type WeddingInfo } from './emails.js'
 import { sendMail } from './mailer.js'
 
-// Emails to the couple when a guest replies or a gift goes through. Each partner gets their own
+// Emails to the couple when a guest replies, a gift goes through or the payout account changes. Each partner gets their own
 // copy. These run after the guest's request is answered and never throw: a notice that fails
 // must never fail the guest. Suspended couples can't sign in, so they aren't emailed.
 
@@ -23,6 +23,12 @@ async function emailCouple(coupleId: unknown, build: (name: string) => RenderedE
 
 const quietly = (what: string, work: Promise<unknown>) =>
   void work.catch((err: unknown) => logger.error({ err }, `Couldn’t notify the couple about ${what}`))
+
+/** The bank account gifts are paid into was added or changed. Both partners hear, so neither can do it unnoticed. */
+export const notifyPayout = (
+  wedding: WeddingRef & WeddingInfo,
+  change: { changedBy: string; bankName: string; accountName: string; accountLast4: string; isFirst: boolean },
+) => quietly('a payout change', emailCouple(wedding.coupleId, (name) => payoutChangedEmail({ name, wedding, ...change })))
 
 /** A guest has just replied for the first time. */
 export const notifyRsvp = (wedding: WeddingRef, rsvp: { name: string; attending: boolean }) =>

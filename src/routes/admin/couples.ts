@@ -424,6 +424,8 @@ adminCouplesRouter.post('/couples/:id/gifts/lock', async (req, res) => {
   const { reason } = reasonBody.parse(req.body)
   const { couple, wedding } = await coupleWedding(req.params.id)
   if (!wedding.giftsUnlockedAt) throw new HttpError(409, 'Gifts is already locked for this couple', 'already_locked')
+  // Retire the payments too, or the couple could replay one on the unlock page.
+  await GiftUnlock.updateMany({ weddingId: wedding._id, status: 'success', revokedAt: null }, { $set: { revokedAt: new Date() } })
   await Wedding.updateOne({ _id: wedding._id }, { $unset: { giftsUnlockedAt: 1 } })
   await audit(req, 'gifts.locked', { coupleId: couple._id, targetType: 'couple', targetId: couple._id, targetLabel: await label(couple), reason })
   res.json({ ok: true })

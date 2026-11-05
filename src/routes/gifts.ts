@@ -3,6 +3,8 @@ import type { HydratedDocument, Types } from 'mongoose'
 import { z } from 'zod'
 import { env } from '../config/env.js'
 import { HttpError } from '../lib/httpError.js'
+import { notifyPayout } from '../lib/notify.js'
+import { verifyPassword } from '../lib/password.js'
 import {
   createSubaccount,
   listBanks,
@@ -91,11 +93,18 @@ giftsRouter.post('/gifts/account/resolve', accountLookupLimiter, async (req, res
   res.json({ bankName: bank.name, accountName })
 })
 
+const saveAccountInput = accountInput.extend({ password: z.string().min(1).max(128) })
+
 // Step 2: save it. Creates (or updates) the couple's Paystack subaccount, then keeps only the
-// bank, the resolved name and the last four digits.
+// bank, the resolved name and the last four digits. This decides where guests' money goes, so a
+// signed-in session isn't enough: it takes the password, and both partners are told.
 giftsRouter.put('/gifts/account', accountLookupLimiter, async (req, res) => {
-  const wedding = await ownWedding(req.auth!.user.coupleId)
-  const { bankCode, accountNumber } = accountInput.parse(req.body)
+  const { user } = req.auth!
+  const wedding = await ownWedding(user.coupleId)
+  const { bankCode, accountNumber, password } = saveAccountInput.parse(req.body)
+  if (!(await verifyPassword(user.passwordHash, password))) {
+    throw new HttpError(400, 'That password is incorrect', 'invalid_password')
+  }
   const { bank, accountName } = await lookup(bankCode, accountNumber)
 
   const input = {
@@ -104,6 +113,7 @@ giftsRouter.put('/gifts/account', accountLookupLimiter, async (req, res) => {
     account_number: accountNumber,
     description: `Wedding gifts for wedding ${String(wedding._id)}`,
   }
+  const isFirst = !wedding.payout?.subaccountCode
   const sub = wedding.payout?.subaccountCode
     ? await updateSubaccount(wedding.payout.subaccountCode, input)
     : await createSubaccount(input)
@@ -118,6 +128,7 @@ giftsRouter.put('/gifts/account', accountLookupLimiter, async (req, res) => {
   }
   await wedding.save()
   res.json({ payout: { bankName: bank.name, accountName, accountLast4: accountNumber.slice(-4) } })
+  notifyPayout(wedding, { changedBy: user.name, bankName: bank.name, accountName, accountLast4: accountNumber.slice(-4), isFirst })
 })
 
 const toggleInput = z.strictObject({ enabled: z.boolean() })
