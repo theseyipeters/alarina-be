@@ -6,7 +6,7 @@ import { paystackConfigured } from '../../lib/paystack.js'
 import { Contribution } from '../../models/contribution.js'
 import { Couple } from '../../models/couple.js'
 import { GiftUnlock } from '../../models/giftUnlock.js'
-import { Rsvp } from '../../models/rsvp.js'
+import { attendingExpr, replyKindExpr, Rsvp } from '../../models/rsvp.js'
 import { User } from '../../models/user.js'
 import { Wedding } from '../../models/wedding.js'
 import { byLagosDay, coupleLabel, emptyKinds, lastDays, paymentLines } from './shared.js'
@@ -58,7 +58,7 @@ adminOverviewRouter.get('/overview', async (_req, res) => {
     User.countDocuments(),
     Couple.countDocuments({ suspendedAt: { $type: 'date' } }),
     Wedding.aggregate<{ _id: string; n: number }>([{ $group: { _id: '$status', n: { $sum: 1 } } }]),
-    Rsvp.aggregate<{ _id: boolean; n: number }>([{ $group: { _id: '$attending', n: { $sum: 1 } } }]),
+    Rsvp.aggregate<{ _id: 'attending' | 'declined' | 'rejected'; n: number }>([{ $group: { _id: replyKindExpr, n: { $sum: 1 } } }]),
     Contribution.aggregate<{ _id: 'cash' | 'aso_ebi' | 'wishlist'; amount: number; count: number }>([
       { $match: { status: 'success' } },
       ...paymentLines,
@@ -107,7 +107,7 @@ adminOverviewRouter.get('/overview', async (_req, res) => {
   const [upcomingRsvps, recentWeddings] = await Promise.all([
     Rsvp.aggregate<{ _id: unknown; yes: number; total: number }>([
       { $match: { weddingId: { $in: upcomingIds } } },
-      { $group: { _id: '$weddingId', yes: { $sum: { $cond: ['$attending', 1, 0] } }, total: { $sum: 1 } } },
+      { $group: { _id: '$weddingId', yes: { $sum: attendingExpr }, total: { $sum: 1 } } },
     ]),
     Wedding.find({ coupleId: { $in: recentCouples.map((c) => c._id) } }).select('coupleId partnerOneName partnerTwoName status'),
   ])
@@ -129,8 +129,9 @@ adminOverviewRouter.get('/overview', async (_req, res) => {
         published: weddingStatus.find((s) => s._id === 'published')?.n ?? 0,
       },
       rsvps: {
-        attending: rsvpGroups.find((r) => r._id === true)?.n ?? 0,
-        declined: rsvpGroups.find((r) => r._id === false)?.n ?? 0,
+        attending: rsvpGroups.find((r) => r._id === 'attending')?.n ?? 0,
+        declined: rsvpGroups.find((r) => r._id === 'declined')?.n ?? 0,
+        rejected: rsvpGroups.find((r) => r._id === 'rejected')?.n ?? 0,
       },
       gifts: {
         amount: gifts?.amount ?? 0,

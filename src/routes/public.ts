@@ -84,6 +84,8 @@ const rsvpDto = (r: HydratedDocument<RsvpDoc>) => ({
   email: r.email,
   phone: r.phone,
   attending: r.attending,
+  rejected: Boolean(r.rejectedAt),
+  rejectionNote: r.rejectionNote ?? null,
   updatedAt: r.updatedAt,
 })
 
@@ -200,6 +202,7 @@ const updateBody = z.strictObject({
 
 publicRouter.patch('/rsvps/:token', publicLookupLimiter, async (req, res) => {
   const { rsvp, wedding } = await findByEditToken(String(req.params.token))
+  if (rsvp.rejectedAt) throw new HttpError(409, 'This reply can’t be changed any more', 'rsvp_rejected')
   const input = updateBody.parse(req.body)
   rsvp.set(Object.fromEntries(Object.entries(input).filter(([, v]) => v !== undefined)))
   await rsvp.save()

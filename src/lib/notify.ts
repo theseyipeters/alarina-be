@@ -31,7 +31,7 @@ export const notifyRsvp = (wedding: WeddingRef, rsvp: { name: string; attending:
     (async () => {
       const [info, comingSoFar] = await Promise.all([
         Wedding.findById(wedding._id).select('partnerOneName partnerTwoName partnerOneRole partnerTwoRole'),
-        Rsvp.countDocuments({ weddingId: wedding._id, attending: true }),
+        Rsvp.countDocuments({ weddingId: wedding._id, attending: true, rejectedAt: null }),
       ])
       if (!info) return
       await emailCouple(wedding.coupleId, (name) =>

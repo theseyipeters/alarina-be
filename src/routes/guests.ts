@@ -3,10 +3,12 @@ import { Router } from 'express'
 import mongoose, { type HydratedDocument, type Types } from 'mongoose'
 import { z } from 'zod'
 import { env } from '../config/env.js'
+import { rsvpRejectedEmail, rsvpRestoredEmail } from '../lib/emails.js'
 import { HttpError } from '../lib/httpError.js'
+import { sendMail } from '../lib/mailer.js'
 import { requireAuth } from '../middleware/auth.js'
 import { Couple } from '../models/couple.js'
-import { Rsvp, type RsvpDoc } from '../models/rsvp.js'
+import { replyKind, Rsvp, type RsvpDoc } from '../models/rsvp.js'
 import { User } from '../models/user.js'
 import { Wedding } from '../models/wedding.js'
 
@@ -61,6 +63,8 @@ const responseDto = (r: HydratedDocument<RsvpDoc>) => ({
   email: r.email,
   phone: r.phone,
   attending: r.attending,
+  rejected: Boolean(r.rejectedAt),
+  rejectionNote: r.rejectionNote ?? null,
   sideUserId: r.sideUserId ? String(r.sideUserId) : null,
   sideSource: r.sideSource ?? null,
   editLinkActive: !r.editRevokedAt && r.editExpiresAt > new Date(),
@@ -74,8 +78,9 @@ guestsRouter.get('/rsvps', async (req, res) => {
 
   const count = (list: typeof rsvps) => ({
     total: list.length,
-    attending: list.filter((r) => r.attending).length,
-    declined: list.filter((r) => !r.attending).length,
+    attending: list.filter((r) => replyKind(r) === 'attending').length,
+    declined: list.filter((r) => replyKind(r) === 'declined').length,
+    rejected: list.filter((r) => replyKind(r) === 'rejected').length,
   })
 
   res.json({
@@ -123,4 +128,44 @@ guestsRouter.post('/rsvps/:id/revoke-link', async (req, res) => {
   rsvp.editRevokedAt ??= new Date()
   await rsvp.save()
   res.json({ rsvp: responseDto(rsvp) })
+})
+
+const rejectBody = z.strictObject({ note: z.string().trim().max(300).optional() })
+
+// Rejects a guest who accepted and emails them. Their private link stops letting them change their
+// reply. The update is conditional so a double click can't email the guest twice.
+guestsRouter.post('/rsvps/:id/reject', async (req, res) => {
+  const { wedding } = await coupleContext(req.auth!.user.coupleId)
+  const found = await findOwnRsvp(wedding._id, String(req.params.id))
+  const { note } = rejectBody.parse(req.body)
+
+  if (found.rejectedAt) return void res.json({ rsvp: responseDto(found), emailSent: true })
+  const rsvp = await Rsvp.findOneAndUpdate(
+    { _id: found._id, attending: true, rejectedAt: null },
+    { $set: { rejectedAt: new Date(), ...(note && { rejectionNote: note }) } },
+    { returnDocument: 'after' },
+  )
+  if (!rsvp) throw new HttpError(409, 'Only a guest who accepted can be rejected', 'rsvp_not_attending')
+
+  const emailSent = await sendMail({ to: rsvp.email, ...rsvpRejectedEmail({ wedding, guestName: rsvp.name, note }) })
+  res.json({ rsvp: responseDto(rsvp), emailSent })
+})
+
+// Undoes a rejection, in case it was a mistake, and tells the guest their place is confirmed.
+guestsRouter.post('/rsvps/:id/restore', async (req, res) => {
+  const { wedding } = await coupleContext(req.auth!.user.coupleId)
+  const found = await findOwnRsvp(wedding._id, String(req.params.id))
+
+  const rsvp = await Rsvp.findOneAndUpdate(
+    { _id: found._id, rejectedAt: { $ne: null } },
+    { $unset: { rejectedAt: 1, rejectionNote: 1 } },
+    { returnDocument: 'after' },
+  )
+  if (!rsvp) return void res.json({ rsvp: responseDto(found), emailSent: true })
+
+  const emailSent = await sendMail({
+    to: rsvp.email,
+    ...rsvpRestoredEmail({ wedding, guestName: rsvp.name, link: `${env.CLIENT_ORIGIN}/invite/${wedding.slug}` }),
+  })
+  res.json({ rsvp: responseDto(rsvp), emailSent })
 })

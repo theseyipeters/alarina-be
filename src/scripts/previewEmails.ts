@@ -8,6 +8,8 @@ import {
   passwordResetEmail,
   rsvpLinkEmail,
   rsvpReceivedEmail,
+  rsvpRejectedEmail,
+  rsvpRestoredEmail,
   welcomeEmail,
   type RenderedEmail,
 } from '../lib/emails.js'
@@ -32,6 +34,9 @@ const emails: Record<string, RenderedEmail> = {
   'rsvp-attending': rsvpLinkEmail({ ...rsvp, attending: true, isResend: false }),
   'rsvp-declined': rsvpLinkEmail({ ...rsvp, attending: false, isResend: false }),
   'rsvp-resend': rsvpLinkEmail({ ...rsvp, attending: true, isResend: true }),
+  'rsvp-rejected': rsvpRejectedEmail({ wedding, guestName: 'Chidi Okeke' }),
+  'rsvp-rejected-note': rsvpRejectedEmail({ wedding, guestName: 'Chidi Okeke', note: 'We kept the guest list very small this year. Thank you for understanding.' }),
+  'rsvp-restored': rsvpRestoredEmail({ wedding, guestName: 'Chidi Okeke', link: 'http://localhost:5173/invite/sample' }),
   'couple-rsvp-attending': rsvpReceivedEmail({ name: 'Adaeze Okafor', wedding, guestName: 'Chidi Okeke', attending: true, comingSoFar: 42 }),
   'couple-rsvp-declined': rsvpReceivedEmail({ name: 'Adaeze Okafor', wedding, guestName: 'Chidi Okeke', attending: false, comingSoFar: 1 }),
   'couple-gift-cash': giftReceivedEmail({ name: 'Adaeze Okafor', wedding, guestName: 'Chidi Okeke', lines: [{ kind: 'cash', amount: 2500000 }], amount: 2500000 }),
