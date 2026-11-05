@@ -38,14 +38,15 @@ const date = () => z.preprocess(blankToNull, calendarDate.nullable()).optional()
 const phoneNumber = () => z.preprocess(blankToNull, z.string().trim().max(PHONE_MAX).regex(/^[0-9+()\s-]*$/).nullable()).optional()
 const time = () => z.preprocess(blankToNull, clockTime.nullable()).optional()
 // "#Ola And Eni" → "OlaAndEni": the "#" is added back on the invitation, and a tag can't hold spaces.
+// Underscores go too (older tags may have them), and apostrophes are always stored curly, never first.
 const hashtag = () =>
   z
     .preprocess(
-      (v) => blankToNull(typeof v === 'string' ? v.replace(/[#\s]/g, '') : v),
+      (v) => blankToNull(typeof v === 'string' ? v.replace(/[#\s_]/g, '').replace(/'/g, '’').replace(/^’+/, '') : v),
       z
         .string()
         .max(40)
-        .regex(/^[\p{L}\p{M}\p{N}_]+$/u, 'Use letters, numbers and underscores only')
+        .regex(/^[\p{L}\p{M}\p{N}’]+$/u, 'Use letters, numbers and apostrophes only')
         .nullable(),
     )
     .optional()
