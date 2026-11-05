@@ -17,16 +17,18 @@ import {
   TEXTURES,
 } from '../lib/design.js'
 import { HttpError } from '../lib/httpError.js'
-import { invitationContent } from '../lib/invitation.js'
+import { eventNames, invitationContent } from '../lib/invitation.js'
 import { makeSlug } from '../lib/slug.js'
 import { requireAuth } from '../middleware/auth.js'
-import { CEREMONY_TYPES, PARENT_FIELDS, ROLES, Wedding, type WeddingDoc } from '../models/wedding.js'
+import { PARENT_FIELDS, ROLES, Wedding, type WeddingDoc } from '../models/wedding.js'
 
 export const weddingRouter = Router()
 
 weddingRouter.use(requireAuth)
 
 // Blank strings clear a field, so a couple can delete an answer by emptying the input.
+const EVENT_NAME_MAX = 80
+
 const blankToNull = (v: unknown) => (typeof v === 'string' && v.trim() === '' ? null : v)
 const text = (max: number) => z.preprocess(blankToNull, z.string().trim().max(max).nullable()).optional()
 const date = () => z.preprocess(blankToNull, calendarDate.nullable()).optional()
@@ -91,14 +93,16 @@ const patchBody = z.strictObject({
   startTime: time(),
   venueName: text(120),
   venueAddress: text(200),
-  ceremonyType: z.preprocess(blankToNull, z.enum(CEREMONY_TYPES).nullable()).optional(),
+  ceremonyName: text(EVENT_NAME_MAX),
   receptionSeparate: z.boolean().optional(),
+  receptionName: text(EVENT_NAME_MAX),
   receptionVenueName: text(120),
   receptionVenueAddress: text(200),
   receptionTime: time(),
   dressNote: text(200),
   message: text(1000),
   rsvpDeadline: date(),
+  strictlyByInvitation: z.boolean().optional(),
   events: z.array(eventInput).max(10).optional(),
   template: z.enum(TEMPLATES).optional(),
   palette: z.enum(PALETTES).optional(),
@@ -127,6 +131,12 @@ function publishProblems(w: Wedding) {
   if (w.date && w.date < todayInLagos()) problems.date = 'The wedding date has already passed'
   if (w.receptionSeparate && !w.receptionVenueName) {
     problems.receptionVenueName = 'Add the reception venue, or say it’s at the ceremony venue'
+  }
+  // One venue can go without a name; two need telling apart.
+  if (w.receptionSeparate && w.receptionVenueName) {
+    const names = eventNames(w)
+    if (!names.ceremonyName) problems.ceremonyName = 'Add a name for your ceremony'
+    if (!names.receptionName) problems.receptionName = 'Add a name for your reception'
   }
   if (w.rsvpDeadline && w.date && w.rsvpDeadline > w.date) {
     problems.rsvpDeadline = 'The RSVP deadline must be on or before the wedding date'
@@ -170,6 +180,8 @@ weddingRouter.patch('/', async (req, res) => {
     if (value === null) $unset[key] = ''
     else $set[key] = value
   }
+  // Once the couple has answered, the old ceremony type no longer speaks for them.
+  if (fields.ceremonyName !== undefined) $unset.ceremonyType = ''
   if (events) {
     $set.events = events.map((e) => Object.fromEntries(Object.entries(e).filter(([, v]) => v != null)))
   }

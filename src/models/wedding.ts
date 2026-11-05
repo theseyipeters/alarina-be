@@ -113,15 +113,21 @@ const weddingSchema = new Schema(
     startTime: String,
     venueName: String,
     venueAddress: String,
+    // What the couple calls it. A single name can cover the whole day.
+    ceremonyName: String,
+    // From before couples named their own events; see eventNames in lib/invitation.ts.
     ceremonyType: { type: String, enum: CEREMONY_TYPES },
-    // A reception somewhere else, the same day.
+    // A reception somewhere else, the same day, under the couple's own name for it.
     receptionSeparate: { type: Boolean, default: false, required: true },
+    receptionName: String,
     receptionVenueName: String,
     receptionVenueAddress: String,
     receptionTime: String,
     dressNote: String,
     message: String,
     rsvpDeadline: String,
+    // The "Strictly by Invitation" line at the foot of the card.
+    strictlyByInvitation: { type: Boolean, default: true, required: true },
     events: { type: [eventSchema], default: [] },
 
     // Each partner's personal share link (/invite/:slug?from=code). Replies through it are
