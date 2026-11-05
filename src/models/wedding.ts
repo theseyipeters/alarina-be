@@ -126,6 +126,9 @@ const weddingSchema = new Schema(
     dressNote: String,
     message: String,
     rsvpDeadline: String,
+    // Numbers guests can call, shown on the card as the couple typed them.
+    contactPhoneOne: String,
+    contactPhoneTwo: String,
     // The "Strictly by Invitation" line at the foot of the card.
     strictlyByInvitation: { type: Boolean, default: true, required: true },
     events: { type: [eventSchema], default: [] },

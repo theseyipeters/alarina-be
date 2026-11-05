@@ -56,6 +56,8 @@ export const invitationContent = (w: Wedding) => ({
   dressNote: w.dressNote ?? null,
   message: w.message ?? null,
   rsvpDeadline: w.rsvpDeadline ?? null,
+  contactPhoneOne: w.contactPhoneOne ?? null,
+  contactPhoneTwo: w.contactPhoneTwo ?? null,
   strictlyByInvitation: w.strictlyByInvitation,
   events: w.events.map((e) => ({
     id: e.id,

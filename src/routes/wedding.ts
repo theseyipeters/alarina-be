@@ -28,10 +28,14 @@ weddingRouter.use(requireAuth)
 
 // Blank strings clear a field, so a couple can delete an answer by emptying the input.
 const EVENT_NAME_MAX = 80
+const PHONE_MAX = 20
+const PHONE_MIN_DIGITS = 7
 
 const blankToNull = (v: unknown) => (typeof v === 'string' && v.trim() === '' ? null : v)
 const text = (max: number) => z.preprocess(blankToNull, z.string().trim().max(max).nullable()).optional()
 const date = () => z.preprocess(blankToNull, calendarDate.nullable()).optional()
+// Autosave sends a number while it's being typed, so a full number is only required to publish.
+const phoneNumber = () => z.preprocess(blankToNull, z.string().trim().max(PHONE_MAX).regex(/^[0-9+()\s-]*$/).nullable()).optional()
 const time = () => z.preprocess(blankToNull, clockTime.nullable()).optional()
 // "#Ola And Eni" → "OlaAndEni": the "#" is added back on the invitation, and a tag can't hold spaces.
 const hashtag = () =>
@@ -102,6 +106,8 @@ const patchBody = z.strictObject({
   dressNote: text(200),
   message: text(1000),
   rsvpDeadline: date(),
+  contactPhoneOne: phoneNumber(),
+  contactPhoneTwo: phoneNumber(),
   strictlyByInvitation: z.boolean().optional(),
   events: z.array(eventInput).max(10).optional(),
   template: z.enum(TEMPLATES).optional(),
@@ -140,6 +146,10 @@ function publishProblems(w: Wedding) {
   }
   if (w.rsvpDeadline && w.date && w.rsvpDeadline > w.date) {
     problems.rsvpDeadline = 'The RSVP deadline must be on or before the wedding date'
+  }
+  for (const key of ['contactPhoneOne', 'contactPhoneTwo'] as const) {
+    const phone = w[key]
+    if (phone && phone.replace(/\D/g, '').length < PHONE_MIN_DIGITS) problems[key] = 'Enter a full phone number, or remove it'
   }
   return problems
 }
