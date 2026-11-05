@@ -3,6 +3,7 @@ import { Router } from 'express'
 import type { HydratedDocument } from 'mongoose'
 import { z } from 'zod'
 import { env } from '../config/env.js'
+import { logger } from '../config/logger.js'
 import { isDuplicateKeyError } from '../db/transaction.js'
 import { HttpError } from '../lib/httpError.js'
 import { MAX_ITEMS, MAX_QUANTITY } from '../lib/asoEbi.js'
@@ -117,6 +118,32 @@ const sendEditLink = (wedding: WeddingRecord, rsvp: RsvpDoc, link: string, expir
     ...rsvpLinkEmail({ wedding, guestName: rsvp.name, attending: rsvp.attending, link, expiresAt, isResend }),
   })
 
+/**
+ * Emails an extra private link. The first one keeps working, so a stranger typing a guest's address
+ * can't break it. A link the couple revoked stays revoked, and a rejected guest has nothing left to
+ * change. Returns whether a link is on its way.
+ */
+async function resendEditLink(wedding: WeddingRecord, rsvp: HydratedDocument<RsvpDoc>) {
+  if (rsvp.editRevokedAt || rsvp.rejectedAt) return false
+
+  // Claimed atomically, so a burst of requests sends one email.
+  const claimed = await Rsvp.findOneAndUpdate(
+    { _id: rsvp._id, $or: [{ linkResentAt: null }, { linkResentAt: { $lt: new Date(Date.now() - LINK_RESEND_COOLDOWN) } }] },
+    { $set: { linkResentAt: new Date() } },
+  )
+  if (!claimed) return true
+
+  const { token, tokenHash } = newToken()
+  const expiresAt = editExpiry(wedding)
+  const emailSent = await sendEditLink(wedding, rsvp, editLink(token), expiresAt, true)
+  if (emailSent) {
+    await Rsvp.updateOne({ _id: rsvp._id }, { $set: { resendTokenHash: tokenHash, editExpiresAt: expiresAt } })
+  } else {
+    await Rsvp.updateOne({ _id: rsvp._id }, { $unset: { linkResentAt: 1 } })
+  }
+  return emailSent
+}
+
 publicRouter.get('/invitations/:slug', publicLookupLimiter, async (req, res) => {
   const wedding = await findPublished(String(req.params.slug))
   if (!wedding) throw notFound()
@@ -171,30 +198,26 @@ publicRouter.post('/invitations/:slug/rsvps', rsvpCreateLimiter, async (req, res
   } catch (err) {
     if (!isDuplicateKeyError(err)) throw err
 
-    // Already replied. Email an extra private link to that address (never to the requester's
-    // screen); the first one keeps working, so a stranger typing a guest's address can't break it.
-    // A link the couple revoked stays revoked, and a rejected guest has nothing left to change.
+    // Already replied. The link goes to that address, never to the requester's screen.
     const existing = await Rsvp.findOne({ weddingId: wedding._id, email }).orFail()
-    const alreadyResponded = (emailSent: boolean) =>
-      new HttpError(409, 'You’ve already replied with this email', 'already_responded', { emailSent })
-    if (existing.editRevokedAt || existing.rejectedAt) throw alreadyResponded(false)
-
-    // Claimed atomically, so a burst of requests sends one email.
-    const claimed = await Rsvp.findOneAndUpdate(
-      { _id: existing._id, $or: [{ linkResentAt: null }, { linkResentAt: { $lt: new Date(Date.now() - LINK_RESEND_COOLDOWN) } }] },
-      { $set: { linkResentAt: new Date() } },
-    )
-    if (!claimed) throw alreadyResponded(true)
-
-    const expiresAt = editExpiry(wedding)
-    const emailSent = await sendEditLink(wedding, existing, editLink(token), expiresAt, true)
-    if (emailSent) {
-      await Rsvp.updateOne({ _id: existing._id }, { $set: { resendTokenHash: tokenHash, editExpiresAt: expiresAt } })
-    } else {
-      await Rsvp.updateOne({ _id: existing._id }, { $unset: { linkResentAt: 1 } })
-    }
-    throw alreadyResponded(emailSent)
+    const emailSent = await resendEditLink(wedding, existing)
+    throw new HttpError(409, 'You’ve already replied with this email', 'already_responded', { emailSent })
   }
+})
+
+const resendBody = z.strictObject({ email: z.email().max(254) })
+
+// For a guest who lost their private link. Answers the same way whether or not the address has
+// replied, so this can't be used to check who's on the guest list. The email is sent without
+// waiting, so the response time doesn't tell either.
+publicRouter.post('/invitations/:slug/rsvps/resend', rsvpCreateLimiter, async (req, res) => {
+  const wedding = await findPublished(String(req.params.slug))
+  if (!wedding) throw notFound()
+
+  const { email } = resendBody.parse(req.body)
+  const rsvp = await Rsvp.findOne({ weddingId: wedding._id, email: email.toLowerCase() })
+  if (rsvp) void resendEditLink(wedding, rsvp).catch((err: unknown) => logger.error({ err }, 'Couldn’t resend an RSVP link'))
+  res.status(202).json({ ok: true })
 })
 
 async function findByEditToken(token: string) {

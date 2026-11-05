@@ -260,7 +260,7 @@ const coupleNames = (w: WeddingInfo) =>
 
 /**
  * The guest's private link to view or change their RSVP. Sent after a new reply, or again
- * (with an extra link) when someone tries to reply a second time with the same address.
+ * (with an extra link) when someone replies again with the same address or asks for their link.
  */
 export function rsvpLinkEmail({
   wedding,
@@ -290,7 +290,7 @@ export function rsvpLinkEmail({
       eyebrow: 'Your RSVP',
       heading: `Here’s a new link, ${firstName}`,
       paragraphs: [
-        `Someone tried to reply to ${names}’s invitation with this email address. You’ve already replied, so we’ve sent you a fresh private link instead.`,
+        `This email address was entered on ${names}’s invitation. You’ve already replied, so we’ve sent you a fresh private link.`,
         'If that wasn’t you, nothing has changed. Your reply stays as it was.',
       ],
       action,
